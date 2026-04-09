@@ -28,7 +28,7 @@ if 'username' not in st.session_state:
     if st.button("Belépés"):
         if u in USERS and USERS[u] == p:
             st.session_state.username = u
-            if u not in global_data["balances"]: global_data["balances"][u] = 5000
+            if u not in global_data["balances"]: global_data["balances"][u] = 50000
             st.rerun()
     st.stop()
 
