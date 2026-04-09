@@ -7,10 +7,19 @@ from datetime import datetime, timedelta
 # --- OLDAL BEÁLLÍTÁSA ---
 st.set_page_config(page_title="IRL LOGISTIC BUDAPEST", layout="wide")
 
-# --- AUTO-REFRESH (Másodpercenként frissít, hogy ketyegjen a timer) ---
-if "active_trades" in st.cache_resource().get_keys(): # Csak ha van aktív trade
-    time.sleep(1)
-    st.rerun()
+# --- KÖZÖS MEMÓRIA ---
+@st.cache_resource
+def get_global_data():
+    return {
+        "online_users": {}, 
+        "trade_history": [],
+        "active_trades": {}, 
+        "balances": {"admin": 50000, "peti": 50000, "adel": 50000},
+        "base_gallery": []
+    }
+
+global_data = get_global_data()
+USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99"}
 
 # --- SEGÉDFÜGGVÉNYEK ---
 def safe_date_format(dt, fmt="%H:%M:%S"):
@@ -25,20 +34,6 @@ def get_price(trade_dict):
     for key in ['price', 'item_price', 'total_price']:
         if key in trade_dict: return trade_dict[key]
     return 0
-
-# --- KÖZÖS MEMÓRIA ---
-@st.cache_resource
-def get_global_data():
-    return {
-        "online_users": {}, 
-        "trade_history": [],
-        "active_trades": {}, 
-        "balances": {"admin": 50000, "peti": 50000, "adel": 50000},
-        "base_gallery": []
-    }
-
-global_data = get_global_data()
-USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99"}
 
 # --- LOGIN ---
 if 'username' not in st.session_state:
@@ -80,7 +75,7 @@ with menu[0]:
         
         photo = st.file_uploader("Termékfotó feltöltése", type=['jpg', 'png'], key="trade_photo_up")
         
-        if st.button("📦 Kérelem küldése a rendszerbe", key="trade_send_btn"):
+        if st.button("📦 Kérelem küldése", key="trade_send_btn"):
             if item_name and photo:
                 tid = f"TID-{int(time.time())}"
                 global_data["active_trades"][tid] = {
@@ -96,21 +91,19 @@ with menu[0]:
                     "eta_time": None,
                     "wait_min": random.randint(5, 10)
                 }
-                st.success("A kérelem megérkezett a címzetthez!")
+                st.success("Kérelem elküldve!")
                 st.rerun()
-            else:
-                st.error("HIÁNYZÓ ADATOK!")
 
 # --- 2. RENDELÉSEK & CONTROL ---
 with menu[1]:
-    # BEJÖVŐ (CÍMZETTNEK)
+    # BEJÖVŐ
     my_requests = {tid: t for tid, t in global_data["active_trades"].items() 
                    if t.get("receiver") == current_user and t.get("status") == "WAITING_ACCEPTANCE"}
     if my_requests:
         st.subheader("📩 Új csomagod érkezne")
         for tid, t in my_requests.items():
             with st.container(border=True):
-                st.write(f"**{t['sender']}** küldené: **{t['item']}** | Érték: {get_price(t)} Ft")
+                st.write(f"**{t['sender']}** -> **{t['item']}** ({get_price(t)} Ft)")
                 if st.button("ELFOGADOM ✅", key=f"acc_{tid}"):
                     global_data["balances"][t["sender"]] -= (get_price(t) + 990)
                     t["status"] = "ACCEPTED"
@@ -119,7 +112,7 @@ with menu[1]:
 
     st.divider()
 
-    # CONTROL PANEL (FELADÓNAK - Itt állítod a státuszt és az időt)
+    # CONTROL (Itt váltod a státuszt és az időt)
     st.subheader("🎮 Futár Vezérlőpult")
     my_controls = {tid: t for tid, t in global_data["active_trades"].items() 
                    if t.get("sender") == current_user and t.get("status") == "ACCEPTED"}
@@ -129,19 +122,16 @@ with menu[1]:
             st.write(f"📦 **{t['item']}** -> {t['receiver']}")
             c1, c2, c3 = st.columns(3)
             with c1:
-                # Manuális fázis állítás
-                new_state = st.selectbox("Fázis", 
-                    ["Csomag felvéve", "Úton a reptérre", "A gép felszállt", "Kiszállítás alatt", "A kapu előtt"], 
-                    index=["Csomag felvéve", "Úton a reptérre", "A gép felszállt", "Kiszállítás alatt", "A kapu előtt"].index(t["state_text"]) if t["state_text"] in ["Csomag felvéve", "Úton a reptérre", "A gép felszállt", "Kiszállítás alatt", "A kapu előtt"] else 0,
-                    key=f"sel_{tid}")
-                if st.button("Státusz mentése", key=f"upd_{tid}"):
+                status_list = ["Csomag felvéve", "Úton a reptérre", "A gép felszállt", "Kiszállítás alatt", "A kapu előtt"]
+                current_idx = status_list.index(t["state_text"]) if t["state_text"] in status_list else 0
+                new_state = st.selectbox("Státusz", status_list, index=current_idx, key=f"sel_{tid}")
+                if st.button("Mentés", key=f"upd_{tid}"):
                     t["state_text"] = new_state
                     st.rerun()
             with c2:
-                # Manuális ETA indítás
                 if t.get("eta_time") is None:
                     m_set = st.number_input("Perc:", 1, 60, t['wait_min'], key=f"minset_{tid}")
-                    if st.button("🚀 SZÁLLÍTÁS INDÍTÁSA", key=f"start_{tid}"):
+                    if st.button("🚀 INDÍTÁS", key=f"start_{tid}"):
                         t["eta_time"] = datetime.now() + timedelta(minutes=m_set)
                         t["start_time"] = datetime.now()
                         t["wait_min"] = m_set
@@ -151,17 +141,17 @@ with menu[1]:
             with c3:
                 with st.expander("Számla"):
                     st.image(t["photo"], use_container_width=True)
-                    st.write(f"Végösszeg: {get_price(t) + 990} Ft")
+                    st.write(f"Összeg: {get_price(t) + 990} Ft")
 
-    # ÉLŐ KÖVETÉS ÉS TIMER (MINDENKI LÁTJA)
+    # ÉLŐ KÖVETÉS & TIMER
     st.divider()
     st.subheader("📢 Élő Szállítási Állapot")
     tracking = {tid: t for tid, t in global_data["active_trades"].items() if t.get("status") == "ACCEPTED"}
     
     for tid, t in tracking.items():
         with st.container(border=True):
-            st.write(f"🚚 **{t['item']}** ({t['sender']} -> {t['receiver']})")
-            st.info(f"📍 Jelenlegi helyzet: **{t['state_text']}**")
+            st.write(f"🚚 **{t['item']}** | Futár: {t['sender']}")
+            st.info(f"📍 Helyzet: **{t['state_text']}**")
             
             eta = t.get("eta_time")
             if eta:
@@ -170,17 +160,15 @@ with menu[1]:
                 
                 if remaining > 0:
                     m, s = divmod(int(remaining), 60)
-                    st.header(f"⏳ HÁTRALÉVŐ IDŐ: {m:02d}:{s:02d}")
-                    # Progress bar
+                    st.header(f"⏳ IDŐ: {m:02d}:{s:02d}")
                     total_s = t.get("wait_min", 10) * 60
                     elapsed = (datetime.now() - t.get("start_time", datetime.now())).total_seconds()
                     st.progress(min(1.0, elapsed / total_s))
                 else:
-                    st.success("✅ A CSOMAG MEGÉRKEZETT!")
+                    st.success("✅ MEGÉRKEZETT!")
                     if current_user == t["receiver"]:
-                        if st.button("Átvétel igazolása", key=f"recv_{tid}"):
+                        if st.button("Átvétel", key=f"recv_{tid}"):
                             t["status"] = "DELIVERED"
-                            t["received_at"] = datetime.now()
                             st.rerun()
             else:
                 st.warning("Várakozás az indításra...")
@@ -209,9 +197,11 @@ with menu[3]:
     for idx, entry in enumerate(global_data["base_gallery"][::-1]):
         with cols[idx % 3]:
             st.image(entry["photo"])
-            st.caption(f"👤 {entry['user']} | 🕒 {entry['time']}")
+            st.caption(f"{entry['user']} | {entry['time']}")
 
-# Force refresh loop for the timer
-if any(t.get("status") == "ACCEPTED" and t.get("eta_time") for t in global_data["active_trades"].values()):
+# --- AUTO-REFRESH LOGIKA (A hiba javítása) ---
+# Megnézzük, van-e bármilyen futó trade. Ha igen, 1 mp múlva frissítünk.
+any_active = any(t.get("status") == "ACCEPTED" and t.get("eta_time") is not None for t in global_data["active_trades"].values())
+if any_active:
     time.sleep(1)
     st.rerun()
