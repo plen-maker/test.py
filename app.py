@@ -53,7 +53,8 @@ with menu[0]:
         with c1:
             start = st.selectbox("Indulás", ["Catánia (HU)", "Codeland (RO)", "New York", "Planeland", "London"])
             end = st.selectbox("Cél", ["Catánia (HU)", "Codeland (RO)", "New York", "Planeland", "London"])
-            delivery_time = st.number_input("Szállítási idő (percben)", min_value=5, max_value=60, value=10)
+            # Itt már nem te adod meg az időt, hanem generálunk egyet
+            gen_wait = random.randint(5, 10)
         with c2:
             item_price = st.number_input("Termék ára (Ft)", min_value=0, value=1000)
             item = st.text_input("Tartalom")
@@ -67,6 +68,9 @@ with menu[0]:
             if item and photo:
                 if global_data["balances"][current_user] >= total_cost:
                     trade_id = f"TID-{int(time.time())}"
+                    # A várható idő kiszámítása a jelenlegi időhöz adva
+                    eta = datetime.now() + timedelta(minutes=gen_wait)
+                    
                     global_data["active_trades"][trade_id] = {
                         "sender": current_user,
                         "receiver": target,
@@ -78,11 +82,12 @@ with menu[0]:
                         "item_price": item_price,
                         "shipping_fee": 990,
                         "total_price": total_cost,
-                        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "created_at": datetime.now(),
+                        "eta_time": eta, # Fix érkezési időpont
                         "photo": photo,
-                        "wait_min": delivery_time
+                        "wait_min": gen_wait
                     }
-                    st.success(f"Kérelem elküldve! Összesen {total_cost} Ft lesz levonva, ha elfogadják.")
+                    st.success(f"Kérelem elküldve! Várható érkezés: {eta.strftime('%H:%M')}")
                 else:
                     st.error(f"Nincs elég egyenleged! Szükséges: {total_cost} Ft")
             else:
@@ -92,35 +97,40 @@ with menu[0]:
 
 # --- 2. ÉRTESÍTÉSEK ÉS ÉLŐ KÖVETÉS ---
 with menu[1]:
-    st.subheader("📩 Bejövő kérelmek")
+    # --- BEJÖVŐ KÉRELMEK (Címzettnek) ---
     requests = {tid: t for tid, t in global_data["active_trades"].items() if t["receiver"] == current_user and t["status"] == "WAITING_ACCEPTANCE"}
-    
-    for tid, t in requests.items():
-        with st.container(border=True):
-            st.warning(f"**{t['sender']}** trade-et küldene!")
-            st.write(f"Tárgy: {t['item']} | Érték: {t['total_price']} Ft")
-            col_a, col_b = st.columns(2)
-            if col_a.button(f"ELFOGADOM ✅", key=f"acc_{tid}"):
-                # ITT VONJUK LE A PÉNZT TÉNYLEGESEN
-                global_data["balances"][t["sender"]] -= t["total_price"]
-                t["status"] = "IN_TRANSIT"
-                t["start_time"] = datetime.now()
-                t["arrival_time"] = datetime.now() + timedelta(minutes=t["wait_min"])
-                st.rerun()
-            if col_b.button(f"ELUTASÍTOM ❌", key=f"dec_{tid}"):
-                del global_data["active_trades"][tid]
-                st.rerun()
+    if requests:
+        st.subheader("📩 Bejövő kérelmek")
+        for tid, t in requests.items():
+            with st.container(border=True):
+                st.warning(f"**{t['sender']}** trade-et küldene!")
+                st.write(f"Tárgy: {t['item']} | Érték: {t['total_price']} Ft")
+                col_a, col_b = st.columns(2)
+                if col_a.button(f"ELFOGADOM ✅", key=f"acc_{tid}"):
+                    # LEVONÁS ELFOGADÁSKOR
+                    global_data["balances"][t["sender"]] -= t["total_price"]
+                    t["status"] = "IN_TRANSIT"
+                    t["start_time"] = datetime.now()
+                    st.rerun()
+                if col_b.button(f"ELUTASÍTOM ❌", key=f"dec_{tid}"):
+                    del global_data["active_trades"][tid]
+                    st.rerun()
 
     st.divider()
     st.subheader("🚚 Aktív folyamatok")
+    # Most már a feladó és a címzett is látja!
     active = {tid: t for tid, t in global_data["active_trades"].items() if t["status"] == "IN_TRANSIT" and (t["sender"] == current_user or t["receiver"] == current_user)}
     
+    if not active:
+        st.write("Nincs folyamatban lévő szállítás.")
+
     for tid, t in active.items():
-        elapsed = (datetime.now() - t["start_time"]).total_seconds()
-        total = t["wait_min"] * 60
-        progress = min(elapsed / total, 1.0)
+        now_dt = datetime.now()
+        total_sec = t["wait_min"] * 60
+        elapsed_sec = (now_dt - t["start_time"]).total_seconds()
+        progress = min(elapsed_sec / total_sec, 1.0)
         
-        # Állapot szövegek
+        # State Update szövegek
         if progress < 0.2: state = "We received your order"
         elif progress < 0.4: state = "Your order is in the plane"
         elif progress < 0.6: state = "Your order is at the airport"
@@ -128,21 +138,23 @@ with menu[1]:
         else: state = "Your order is at your gate"
 
         with st.container(border=True):
-            st.write(f"📦 **{t['item']}** | Státusz: {state}")
+            st.write(f"📦 **{t['item']}** ({t['sender']} ➔ {t['receiver']})")
+            st.info(f"📍 Státusz: **{state}** | 🕒 Várható érkezés: **{t['eta_time'].strftime('%H:%M')}**")
             st.progress(progress)
 
-            with st.expander("🧾 Számla megtekintése"):
+            with st.expander("🧾 Digitális Számla megtekintése"):
                 c_img, c_txt = st.columns([1, 2])
                 with c_img: st.image(t["photo"], use_container_width=True)
                 with c_txt:
                     st.markdown(f"""
-                    **ID:** `{tid}` | **Dátum:** {t['created_at']}
+                    **ID:** `{tid}` | **Dátum:** {t['created_at'].strftime('%Y-%m-%d %H:%M')}
                     ---
                     **Termék ára:** {t['item_price']} Ft  
                     **Szállítás:** {t['shipping_fee']} Ft  
                     **ÖSSZESEN LEVONVA:** **{t['total_price']} Ft**
                     ---
                     **Küldő:** {t['sender']} | **Címzett:** {t['receiver']}
+                    **Várható érkezés:** {t['eta_time'].strftime('%H:%M')}
                     """)
 
             if progress >= 1.0 and t["receiver"] == current_user:
@@ -151,33 +163,50 @@ with menu[1]:
                     t["received_at"] = datetime.now()
                     st.rerun()
 
-    # Szatyor visszajelzés
+    # Szatyor visszajelzés (Küldő igazolja vissza)
     delivered = {tid: t for tid, t in global_data["active_trades"].items() if t["status"] == "DELIVERED" and t["sender"] == current_user}
     for tid, t in delivered.items():
         deadline = t["received_at"] + timedelta(minutes=10)
-        if st.button(f"Szatyor megérkezett (Cél: {t['receiver']})", key=f"bag_{tid}"):
+        st.warning(f"Csomag megérkezett {t['receiver']} részére! Visszakaptad a szatyrot?")
+        if st.button(f"Szatyor megérkezett ✅", key=f"bag_{tid}"):
             if datetime.now() > deadline:
                 global_data["balances"][t["receiver"]] -= 155
-            global_data["trade_history"].append({"Idő": t["created_at"], "Kitől": t["sender"], "Kinek": t["receiver"], "Tárgy": t["item"], "Összeg": t["total_price"]})
+            global_data["trade_history"].append({
+                "Idő": t["created_at"].strftime('%H:%M'), 
+                "Kitől": t["sender"], 
+                "Kinek": t["receiver"], 
+                "Tárgy": t["item"], 
+                "Összeg": t["total_price"]
+            })
             del global_data["active_trades"][tid]
             st.rerun()
 
 # --- 3. HISTORY ---
 with menu[2]:
+    st.header("Lezárt Trade-ek")
     if global_data["trade_history"]:
         st.table(pd.DataFrame(global_data["trade_history"]))
+    else:
+        st.write("Még nem történt lezárt tranzakció.")
 
 # --- 4. BASE HUB ---
 with menu[3]:
     st.header("Base HQ Galéria")
-    new_b = st.file_uploader("Kép feltöltése", type=['jpg', 'png'])
-    if st.button("Feltöltés"):
+    new_b = st.file_uploader("Kép feltöltése a bázisról", type=['jpg', 'png'])
+    if st.button("Feltöltés a közösbe"):
         if new_b:
-            global_data["base_gallery"].append({"photo": new_b, "user": current_user, "time": datetime.now().strftime("%H:%M")})
+            global_data["base_gallery"].append({
+                "photo": new_b, 
+                "user": current_user, 
+                "time": datetime.now().strftime("%H:%M")
+            })
+            st.success("Kép feltöltve!")
             st.rerun()
     
-    cols = st.columns(3)
-    for idx, entry in enumerate(global_data["base_gallery"][::-1]):
-        with cols[idx % 3]:
-            st.image(entry["photo"])
-            st.caption(f"👤 {entry['user']} | 🕒 {entry['time']}")
+    st.divider()
+    if global_data["base_gallery"]:
+        cols = st.columns(3)
+        for idx, entry in enumerate(global_data["base_gallery"][::-1]):
+            with cols[idx % 3]:
+                st.image(entry["photo"])
+                st.caption(f"👤 {entry['user'].capitalize()} | 🕒 {entry['time']}")
