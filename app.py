@@ -53,8 +53,6 @@ with menu[0]:
         with c1:
             start = st.selectbox("Indulás", ["Catánia (HU)", "Codeland (RO)", "New York", "Planeland", "London"])
             end = st.selectbox("Cél", ["Catánia (HU)", "Codeland (RO)", "New York", "Planeland", "London"])
-            # Itt már nem te adod meg az időt, hanem generálunk egyet
-            gen_wait = random.randint(5, 10)
         with c2:
             item_price = st.number_input("Termék ára (Ft)", min_value=0, value=1000)
             item = st.text_input("Tartalom")
@@ -68,7 +66,7 @@ with menu[0]:
             if item and photo:
                 if global_data["balances"][current_user] >= total_cost:
                     trade_id = f"TID-{int(time.time())}"
-                    # A várható idő kiszámítása a jelenlegi időhöz adva
+                    gen_wait = random.randint(5, 10)
                     eta = datetime.now() + timedelta(minutes=gen_wait)
                     
                     global_data["active_trades"][trade_id] = {
@@ -83,7 +81,7 @@ with menu[0]:
                         "shipping_fee": 990,
                         "total_price": total_cost,
                         "created_at": datetime.now(),
-                        "eta_time": eta, # Fix érkezési időpont
+                        "eta_time": eta,
                         "photo": photo,
                         "wait_min": gen_wait
                     }
@@ -92,13 +90,13 @@ with menu[0]:
                     st.error(f"Nincs elég egyenleged! Szükséges: {total_cost} Ft")
             else:
                 global_data["balances"][current_user] -= 1500
-                st.error("HIBA! Hiányzó adatok. 1500 Ft büntetés levonva!")
+                st.error("HIBA! 1500 Ft büntetés levonva!")
                 st.rerun()
 
 # --- 2. ÉRTESÍTÉSEK ÉS ÉLŐ KÖVETÉS ---
 with menu[1]:
-    # --- BEJÖVŐ KÉRELMEK (Címzettnek) ---
-    requests = {tid: t for tid, t in global_data["active_trades"].items() if t["receiver"] == current_user and t["status"] == "WAITING_ACCEPTANCE"}
+    # --- BEJÖVŐ KÉRELMEK ---
+    requests = {tid: t for tid, t in global_data["active_trades"].items() if t.get("receiver") == current_user and t.get("status") == "WAITING_ACCEPTANCE"}
     if requests:
         st.subheader("📩 Bejövő kérelmek")
         for tid, t in requests.items():
@@ -107,7 +105,6 @@ with menu[1]:
                 st.write(f"Tárgy: {t['item']} | Érték: {t['total_price']} Ft")
                 col_a, col_b = st.columns(2)
                 if col_a.button(f"ELFOGADOM ✅", key=f"acc_{tid}"):
-                    # LEVONÁS ELFOGADÁSKOR
                     global_data["balances"][t["sender"]] -= t["total_price"]
                     t["status"] = "IN_TRANSIT"
                     t["start_time"] = datetime.now()
@@ -118,19 +115,25 @@ with menu[1]:
 
     st.divider()
     st.subheader("🚚 Aktív folyamatok")
-    # Most már a feladó és a címzett is látja!
-    active = {tid: t for tid, t in global_data["active_trades"].items() if t["status"] == "IN_TRANSIT" and (t["sender"] == current_user or t["receiver"] == current_user)}
+    active = {tid: t for tid, t in global_data["active_trades"].items() if t.get("status") == "IN_TRANSIT" and (t.get("sender") == current_user or t.get("receiver") == current_user)}
     
     if not active:
         st.write("Nincs folyamatban lévő szállítás.")
+    else:
+        # Automatikus frissítés 10 másodpercenként, hogy látszódjon a haladás
+        # st.empty() + time.sleep helyett a st_autorefresh jobb lenne, de maradjunk az alapnál:
+        if any(t.get("status") == "IN_TRANSIT" for t in active.values()):
+            time.sleep(1) # Kis késleltetés a folyamatossághoz
+            st.rerun
 
     for tid, t in active.items():
         now_dt = datetime.now()
-        total_sec = t["wait_min"] * 60
-        elapsed_sec = (now_dt - t["start_time"]).total_seconds()
+        total_sec = t.get("wait_min", 10) * 60
+        start_t = t.get("start_time", now_dt)
+        elapsed_sec = (now_dt - start_t).total_seconds()
         progress = min(elapsed_sec / total_sec, 1.0)
         
-        # State Update szövegek
+        # Státusz szövegek
         if progress < 0.2: state = "We received your order"
         elif progress < 0.4: state = "Your order is in the plane"
         elif progress < 0.6: state = "Your order is at the airport"
@@ -138,75 +141,63 @@ with menu[1]:
         else: state = "Your order is at your gate"
 
         with st.container(border=True):
-            st.write(f"📦 **{t['item']}** ({t['sender']} ➔ {t['receiver']})")
-            st.info(f"📍 Státusz: **{state}** | 🕒 Várható érkezés: **{t['eta_time'].strftime('%H:%M')}**")
+            st.write(f"📦 **{t.get('item', 'Ismeretlen')}** ({t.get('sender')} ➔ {t.get('receiver')})")
+            
+            # BIZTONSÁGOS IDŐ KIÍRÁS (Itt volt a hiba)
+            eta_str = t['eta_time'].strftime('%H:%M') if 'eta_time' in t else "--:--"
+            st.info(f"📍 Státusz: **{state}** | 🕒 Várható érkezés: **{eta_str}**")
             st.progress(progress)
 
             with st.expander("🧾 Digitális Számla megtekintése"):
                 c_img, c_txt = st.columns([1, 2])
                 with c_img: st.image(t["photo"], use_container_width=True)
                 with c_txt:
+                    created_str = t['created_at'].strftime('%Y-%m-%d %H:%M') if 'created_at' in t else "Nincs adat"
                     st.markdown(f"""
-                    **ID:** `{tid}` | **Dátum:** {t['created_at'].strftime('%Y-%m-%d %H:%M')}
+                    **ID:** `{tid}` | **Dátum:** {created_str}
                     ---
-                    **Termék ára:** {t['item_price']} Ft  
-                    **Szállítás:** {t['shipping_fee']} Ft  
-                    **ÖSSZESEN LEVONVA:** **{t['total_price']} Ft**
+                    **Termék ára:** {t.get('item_price', 0)} Ft  
+                    **Szállítás:** {t.get('shipping_fee', 990)} Ft  
+                    **ÖSSZESEN LEVONVA:** **{t.get('total_price', 0)} Ft**
                     ---
-                    **Küldő:** {t['sender']} | **Címzett:** {t['receiver']}
-                    **Várható érkezés:** {t['eta_time'].strftime('%H:%M')}
+                    **Küldő:** {t.get('sender')} | **Címzett:** {t.get('receiver')}
                     """)
 
-            if progress >= 1.0 and t["receiver"] == current_user:
+            if progress >= 1.0 and t.get("receiver") == current_user:
                 if st.button(f"Átvétel visszaigazolása", key=f"done_{tid}"):
                     t["status"] = "DELIVERED"
                     t["received_at"] = datetime.now()
                     st.rerun()
 
-    # Szatyor visszajelzés (Küldő igazolja vissza)
-    delivered = {tid: t for tid, t in global_data["active_trades"].items() if t["status"] == "DELIVERED" and t["sender"] == current_user}
+    # Szatyor visszajelzés
+    delivered = {tid: t for tid, t in global_data["active_trades"].items() if t.get("status") == "DELIVERED" and t.get("sender") == current_user}
     for tid, t in delivered.items():
-        deadline = t["received_at"] + timedelta(minutes=10)
-        st.warning(f"Csomag megérkezett {t['receiver']} részére! Visszakaptad a szatyrot?")
+        st.warning(f"Csomag megérkezett {t['receiver']} részére! Szatyor visszaért?")
         if st.button(f"Szatyor megérkezett ✅", key=f"bag_{tid}"):
-            if datetime.now() > deadline:
-                global_data["balances"][t["receiver"]] -= 155
             global_data["trade_history"].append({
-                "Idő": t["created_at"].strftime('%H:%M'), 
-                "Kitől": t["sender"], 
-                "Kinek": t["receiver"], 
-                "Tárgy": t["item"], 
-                "Összeg": t["total_price"]
+                "Idő": datetime.now().strftime('%H:%M'), 
+                "Kitől": t["sender"], "Kinek": t["receiver"], "Tárgy": t["item"]
             })
             del global_data["active_trades"][tid]
             st.rerun()
 
 # --- 3. HISTORY ---
 with menu[2]:
-    st.header("Lezárt Trade-ek")
     if global_data["trade_history"]:
         st.table(pd.DataFrame(global_data["trade_history"]))
-    else:
-        st.write("Még nem történt lezárt tranzakció.")
 
 # --- 4. BASE HUB ---
 with menu[3]:
     st.header("Base HQ Galéria")
-    new_b = st.file_uploader("Kép feltöltése a bázisról", type=['jpg', 'png'])
-    if st.button("Feltöltés a közösbe"):
+    new_b = st.file_uploader("Kép feltöltése", type=['jpg', 'png'])
+    if st.button("Feltöltés"):
         if new_b:
-            global_data["base_gallery"].append({
-                "photo": new_b, 
-                "user": current_user, 
-                "time": datetime.now().strftime("%H:%M")
-            })
-            st.success("Kép feltöltve!")
+            global_data["base_gallery"].append({"photo": new_b, "user": current_user, "time": datetime.now().strftime("%H:%M")})
             st.rerun()
     
-    st.divider()
     if global_data["base_gallery"]:
         cols = st.columns(3)
         for idx, entry in enumerate(global_data["base_gallery"][::-1]):
             with cols[idx % 3]:
                 st.image(entry["photo"])
-                st.caption(f"👤 {entry['user'].capitalize()} | 🕒 {entry['time']}")
+                st.caption(f"👤 {entry['user']} | 🕒 {entry['time']}")
