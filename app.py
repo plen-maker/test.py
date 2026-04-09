@@ -1,16 +1,20 @@
 import streamlit as st
 import time
 import pandas as pd
-from datetime import datetime
+import random
+from datetime import datetime, timedelta
 
-st.set_page_config(page_title="IRL TRADE - LIVE", layout="wide")
+st.set_page_config(page_title="IRL LOGISTIC SYSTEM", layout="wide")
 
-# --- KÖZÖS MEMÓRIA (Ez minden felhasználó számára ugyanaz a szerveren) ---
+# --- KÖZÖS MEMÓRIA (SZERVER SZINTŰ) ---
 @st.cache_resource
 def get_global_data():
     return {
-        "online_users": {},  # Felhasználónév: utolsó aktivitás
-        "trade_history": []   # Közös lista a trade-eknek
+        "online_users": {}, 
+        "trade_history": [],
+        "active_trades": {}, # Folyamatban lévő szállítások
+        "balances": {"admin": 5000, "peti": 5000, "adel": 5000}, # Alap egyenleg
+        "base_photo": "https://images.unsplash.com/photo-1590247813693-5541d1c609fd?q=80&w=1000"
     }
 
 global_data = get_global_data()
@@ -24,90 +28,114 @@ if 'username' not in st.session_state:
     if st.button("Belépés"):
         if u in USERS and USERS[u] == p:
             st.session_state.username = u
+            if u not in global_data["balances"]: global_data["balances"][u] = 5000
             st.rerun()
     st.stop()
 
-# --- ONLINE ÁLLAPOT FRISSÍTÉSE ---
 current_user = st.session_state.username
-# Beírjuk a közös memóriába, hogy itt vagyunk
 global_data["online_users"][current_user] = time.time()
-
-# Töröljük azokat, akik több mint 20 másodperce nem frissítettek (offline-nak tűnnek)
 now = time.time()
-inactive_users = [u for u, t in global_data["online_users"].items() if now - t > 20]
-for u in inactive_users:
-    del global_data["online_users"][u]
+global_data["online_users"] = {u: t for u, t in global_data["online_users"].items() if now - t < 20}
 
-# --- OLDALSÁV (Sidebar) ---
-st.sidebar.title(f"Szia {current_user.capitalize()}!")
-# Ki van még itt? (Csak a többiek)
+# --- SIDEBAR ---
+st.sidebar.title(f"💰 Egyenleg: {global_data['balances'][current_user]} Ft")
 others_online = [u for u in global_data["online_users"].keys() if u != current_user]
 
-if not others_online:
-    st.sidebar.warning("Várj a barátodra... (nincs más online)")
-    # Automatikus frissítés, hogy lásd, ha belép
-    time.sleep(2)
-    st.rerun()
-else:
-    st.sidebar.subheader("Online partnerek:")
-    for u in others_online:
-        st.sidebar.success(f"🟢 {u.capitalize()}")
+# --- TABS ---
+menu = st.tabs(["🚀 ÚJ TRADE", "📥 ÉRKEZŐ CSOMAGOK", "📜 HISTORY", "🏠 BASE"])
 
-# --- LAPOK (Tabs) ---
-menu = st.tabs(["🚀 TRADE", "📜 HISTORY", "🏠 BASE"])
-
+# --- 1. ÚJ TRADE ---
 with menu[0]:
     if not others_online:
-        st.info("Amint a barátod is belép a saját gépén/mobilján, itt meg fog jelenni!")
+        st.warning("Nincs online partner.")
     else:
-        target = st.selectbox("Partner kiválasztása", others_online)
+        target = st.selectbox("Partner", others_online)
         c1, c2 = st.columns(2)
         with c1:
-            start = st.selectbox("Honnan", ["Catánia", "New York", "Planeland", "Codeland", "London"])
-            end = st.selectbox("Hová", ["Catánia", "New York", "Planeland", "Codeland", "London"])
+            start = st.selectbox("Honnan", ["Catánia (HU)", "Codeland (RO)", "New York", "Planeland", "London"])
+            end = st.selectbox("Hová", ["Catánia (HU)", "Codeland (RO)", "New York", "Planeland", "London"])
         with c2:
             item = st.text_input("Tartalom")
-            pkg = st.text_input("Final Package (csomagolás)")
+            pkg = st.text_input("Final Package leírás")
         
         photo = st.file_uploader("Kép feltöltése", type=['jpg', 'png'])
         
-        if st.button("🚀 TRADING INDÍTÁSA"):
-            if item and photo:
-                # Mentés a közös history-ba
-                new_entry = {
-                    "Idő": datetime.now().strftime("%H:%M"),
-                    "Küldő": current_user,
-                    "Fogadó": target,
-                    "Tárgy": item,
-                    "Útvonal": f"{start} ➔ {end}"
-                }
-                global_data["trade_history"].append(new_entry)
+        if st.button("🚀 INDÍTÁS (990 Ft)"):
+            if global_data["balances"][current_user] < 990:
+                st.error("Nincs elég pénzed!")
+            elif item and photo:
+                global_data["balances"][current_user] -= 990
+                wait_min = random.randint(5, 10)
+                trade_id = f"{current_user}_{int(time.time())}"
                 
-                # FULL SCREEN TIMER
-                placeholder = st.empty()
-                for i in range(10, 0, -1):
-                    with placeholder.container():
-                        st.markdown(f"""
-                        <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:black;z-index:999;display:flex;flex-direction:column;justify-content:center;align-items:center;">
-                            <h1 style="color:red;font-size:120px;font-family:sans-serif;">{i}s</h1>
-                            <h2 style="color:white;font-family:sans-serif;">SZÁLLÍTÁS: {target.upper()} RÉSZÉRE</h2>
-                            <p style="color:gray;font-size:20px;">{start} >>> {end}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    time.sleep(1)
-                placeholder.empty()
-                st.success(f"✅ A csomag sikeresen megérkezett {target} részére!")
+                global_data["active_trades"][trade_id] = {
+                    "sender": current_user,
+                    "receiver": target,
+                    "item": item,
+                    "start_time": datetime.now(),
+                    "arrival_time": datetime.now() + timedelta(minutes=wait_min),
+                    "status": "ÚTON",
+                    "pkg_returned": False
+                }
+                st.success(f"Szállítás elindítva! Várható érkezés: {wait_min} perc múlva.")
             else:
-                st.error("Kérlek adj meg leírást és fotót!")
+                st.error("Hiányzó adatok!")
 
+# --- 2. ÉRKEZŐ CSOMAGOK & VISSZAIGAZOLÁS ---
 with menu[1]:
-    st.header("Közös Trade History")
-    if global_data["trade_history"]:
-        # A legfrissebb legyen felül
-        st.table(pd.DataFrame(global_data["trade_history"][::-1]))
-    else:
-        st.write("Még nincs rögzített trade.")
+    st.header("Csomagjaim")
+    my_incoming = {tid: t for tid, t in global_data["active_trades"].items() if t["receiver"] == current_user}
+    
+    if not my_incoming:
+        st.write("Nincs érkező csomagod.")
+    
+    for tid, t in my_incoming.items():
+        st.info(f"📦 {t['item']} tőle: {t['sender']}")
+        if datetime.now() >= t["arrival_time"]:
+            if st.button(f"Átvétel visszaigazolása ({t['item']})", key=tid):
+                t["status"] = "MEGÉRKEZETT"
+                t["received_at"] = datetime.now()
+                st.success("Átvétel rögzítve! Most 10 perced van visszaadni a szatyrot.")
+                st.rerun()
+        else:
+            diff = t["arrival_time"] - datetime.now()
+            st.write(f"⏳ Érkezés: {int(diff.total_seconds()//60)} perc múlva.")
 
+    st.divider()
+    st.subheader("Szatyor visszajelzés (Küldőként)")
+    my_sent = {tid: t for tid, t in global_data["active_trades"].items() if t["sender"] == current_user and t["status"] == "MEGÉRKEZETT"}
+    
+    for tid, t in my_sent.items():
+        deadline = t["received_at"] + timedelta(minutes=10)
+        st.write(f"Partnernél: {t['receiver']} | Szatyor határidő: {deadline.strftime('%H:%M:%S')}")
+        if st.button(f"Szatyor megérkezett ({t['receiver']})", key=f"ret_{tid}"):
+            if datetime.now() > deadline:
+                global_data["balances"][t["receiver"]] -= 155
+                st.warning("Késve jött a szatyor, 155 Ft levonva tőle.")
+            
+            # Véglegesítés history-ba
+            global_data["trade_history"].append({
+                "Idő": datetime.now().strftime("%H:%M"),
+                "Küldő": t["sender"],
+                "Fogadó": t["receiver"],
+                "Tárgy": t["item"],
+                "Status": "TELJESÍTVE"
+            })
+            del global_data["active_trades"][tid]
+            st.rerun()
+
+# --- 3. HISTORY ---
 with menu[2]:
-    st.header("The Base Update")
-    st.image("https://images.unsplash.com/photo-1587293855946-90419e3c79a2?q=80&w=1000", caption="Bázis fotó")
+    st.header("Lezárt Trade-ek")
+    if global_data["trade_history"]:
+        st.table(pd.DataFrame(global_data["trade_history"][::-1]))
+
+# --- 4. BASE FOTÓ ---
+with menu[3]:
+    st.header("The Base")
+    st.image(global_data["base_photo"], use_container_width=True)
+    new_base_img = st.file_uploader("Bázis fotó frissítése", type=['jpg', 'png'])
+    if st.button("Bázis fotó mentése"):
+        if new_base_img:
+            # Itt csak szimuláljuk a mentést, mivel a streamlit nem tárol fájlt tartósan
+            st.success("Bázis fotó frissítve!")
