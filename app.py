@@ -24,17 +24,7 @@ def get_global_data():
 global_data = get_global_data()
 USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99"}
 
-# --- 3. PROFI HANG FUNKCIÓ ---
-def play_ping():
-    audio_url = "https://www.soundjay.com/buttons/sounds/button-3.mp3"
-    st.components.v1.html(f"""
-        <script>
-        var audio = new Audio("{audio_url}");
-        audio.play();
-        </script>
-    """, height=0)
-
-# --- 4. SZÁMLA GENERÁLÓ ---
+# --- 3. SZÁMLA GENERÁLÓ ---
 def create_pdf(t, tid):
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
@@ -53,44 +43,26 @@ def create_pdf(t, tid):
     buf.seek(0)
     return buf
 
-# --- 5. SESSION STATE INICIALIZÁLÁS (A hiba javítása) ---
-if 'prev_states' not in st.session_state:
-    st.session_state.prev_states = {}
-
-# --- 6. LOGIKA: LOGIN VAGY APP ---
+# --- 4. LOGIN LOGIKA (Garantált szétválasztás) ---
 if 'username' not in st.session_state:
+    # CSAK EZ LÁTSZIK, HA NINCS BELÉPVE
     st.title("🛡️ IRL LOGISTIC - LOGIN")
-    with st.form("login_form"):
+    with st.container(border=True):
         u = st.text_input("Felhasználónév").lower().strip()
         p = st.text_input("Jelszó", type="password")
-        if st.form_submit_button("Belépés"):
+        if st.button("Belépés"):
             if u in USERS and USERS[u] == p:
                 st.session_state.username = u
                 st.rerun()
             else:
                 st.error("Hibás adatok!")
 else:
+    # --- CSAK EZ LÁTSZIK, HA BE VAN LÉPVE ---
     current_user = st.session_state.username
     global_data["online_users"][current_user] = time.time()
 
-    # --- HANG JELZÉS ELLENŐRZÉSE ---
-    for tid, t in global_data["active_trades"].items():
-        if current_user in [t['sender'], t['receiver']]:
-            state_key = f"{tid}_{t['status']}_{t['state_text']}"
-            # Itt már biztosan létezik a prev_states
-            if tid in st.session_state.prev_states:
-                if st.session_state.prev_states[tid] != state_key:
-                    play_ping()
-                    st.toast(f"🔔 Frissítés: {t['item']}")
-            st.session_state.prev_states[tid] = state_key
-
     # SIDEBAR
     st.sidebar.title(f"Szia, {current_user.capitalize()}!")
-    
-    if st.sidebar.button("🔊 HANGOK AKTIVÁLÁSA"):
-        play_ping()
-        st.sidebar.success("Hangok engedélyezve!")
-
     online_now = [u for u, last in global_data["online_users"].items() if time.time() - last < 10]
     st.sidebar.write(f"🟢 Online: {', '.join(online_now)}")
     st.sidebar.metric("Egyenleg", f"{global_data['balances'].get(current_user, 0)} Ft")
@@ -99,6 +71,7 @@ else:
         del st.session_state.username
         st.rerun()
 
+    # FŐ TARTALOM
     menu = st.tabs(["🚀 KÜLDÉS", "📋 CONTROL PANEL", "📜 HISTORY"])
 
     with menu[0]:
@@ -114,18 +87,19 @@ else:
             desc = st.text_area("Leírás")
             photo = st.file_uploader("Fotó", type=['jpg', 'png'])
             
-            if st.button("🚀 KÜLDÉS") and item and photo:
-                tid = f"TID-{int(time.time())}"
-                global_data["active_trades"][tid] = {
-                    "sender": current_user, "receiver": target, "item": item, "description": desc,
-                    "price": price, "status": "WAITING", "state_text": "Várakozás...",
-                    "photo": photo, "start_loc": start, "end_loc": end,
-                    "eta_time": datetime.now() + timedelta(minutes=5)
-                }
-                play_ping()
-                st.success("Küldve!"); st.rerun()
+            if st.button("🚀 KÜLDÉS"):
+                if item and photo:
+                    tid = f"TID-{int(time.time())}"
+                    global_data["active_trades"][tid] = {
+                        "sender": current_user, "receiver": target, "item": item, "description": desc,
+                        "price": price, "status": "WAITING", "state_text": "Várakozás...",
+                        "photo": photo, "start_loc": start, "end_loc": end,
+                        "eta_time": datetime.now() + timedelta(minutes=5)
+                    }
+                    st.success("Küldve!"); st.rerun()
 
     with menu[1]:
+        # Bejövő kérelmek
         reqs = {tid: t for tid, t in global_data["active_trades"].items() if t['receiver'] == current_user and t['status'] == "WAITING"}
         for tid, t in reqs.items():
             with st.container(border=True):
@@ -137,10 +111,11 @@ else:
                         global_data["balances"][t['sender']] += (t['price'] + 495)
                         t["status"] = "ACCEPTED"
                         t["accepted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        play_ping(); st.rerun()
+                        st.rerun()
 
         st.divider()
 
+        # Aktív szállítások
         active = {tid: t for tid, t in global_data["active_trades"].items() if t['status'] == "ACCEPTED"}
         for tid, t in active.items():
             with st.container(border=True):
@@ -149,8 +124,8 @@ else:
                 with cl:
                     if t["sender"] == current_user:
                         states = ["Csomagolás alatt...", "Úton a reptérre", "A levegőben ✈️", "Kiszállítás alatt", "A kapu előtt 🚪"]
-                        curr_val = t["state_text"] if t["state_text"] in states else states[0]
-                        new_s = st.selectbox("Állapot", states, index=states.index(curr_val), key=f"s_{tid}")
+                        curr_v = t["state_text"] if t["state_text"] in states else states[0]
+                        new_s = st.selectbox("Állapot", states, index=states.index(curr_v), key=f"s_{tid}")
                         if new_s != t["state_text"]:
                             t["state_text"] = new_s; st.rerun()
                     else:
@@ -167,6 +142,6 @@ else:
                     pdf = create_pdf(t, tid)
                     st.download_button("📥 SZÁMLA PDF", data=pdf, file_name=f"szamla_{tid}.pdf", key=f"p_{tid}")
 
-    # --- AUTO-REFRESH ---
+    # --- AUTO-REFRESH (Csak belépve fut) ---
     time.sleep(3)
     st.rerun()
