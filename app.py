@@ -50,6 +50,18 @@ with st.sidebar:
         del st.session_state.username
         st.rerun()
 
+
+# --- STREAMLIT "SZAR" ELTÜNTETÉSE ---
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            #stDecoration {display:none;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_unsafe_content=True)
+
 # --- APP INTERFACE ---
 tabs = st.tabs(["🚀 KÜLDÉS", "📋 CONTROL PANEL"])
 
