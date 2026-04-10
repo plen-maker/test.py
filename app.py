@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
 # --- 1. OLDAL BEÁLLÍTÁSA ---
-st.set_page_config(page_title="IRL LOGISTIC HUB", layout="wide", page_icon="🚚")
+st.set_page_config(page_title="IRL LOGISTIC HUB", layout="wide", page_icon="📦")
 
 # --- 2. KÖZÖS MEMÓRIA ---
 @st.cache_resource
@@ -24,179 +24,151 @@ def get_global_data():
 global_data = get_global_data()
 USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99"}
 
-# --- 3. PROFI SZÁMLA GENERÁLÓ ---
+# --- 3. PROFI HANG FUNKCIÓ ---
+def play_ping():
+    # Megbízhatóbb hangforrás és kód
+    audio_url = "https://www.soundjay.com/buttons/sounds/button-3.mp3"
+    st.components.v1.html(f"""
+        <script>
+        var audio = new Audio("{audio_url}");
+        audio.play();
+        </script>
+    """, height=0)
+
+# --- 4. SZÁMLA GENERÁLÓ ---
 def create_pdf(t, tid):
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-    
-    # Fejléc
     c.setFont("Helvetica-Bold", 22)
-    c.setFillColor(colors.darkblue)
-    c.drawString(50, height - 50, "HIVATALOS SZÁMLA / INVOICE")
-    
-    c.setFont("Helvetica", 10)
-    c.setFillColor(colors.black)
-    c.drawString(50, height - 70, f"Tranzakció azonosító: {tid}")
-    c.drawString(50, height - 85, f"Elfogadás ideje: {t.get('accepted_at', 'N/A')}")
-    c.line(50, height - 95, width - 50, height - 95)
-
-    # Útvonal és Partnerek
-    y = height - 120
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, y, "SZÁLLÍTÁSI ADATOK")
-    c.setFont("Helvetica", 11)
-    y -= 20
-    c.drawString(60, y, f"Feladó: {t['sender'].capitalize()}")
-    y -= 15
-    c.drawString(60, y, f"Címzett: {t['receiver'].capitalize()}")
-    y -= 15
-    c.drawString(60, y, f"Útvonal: {t['start_loc']}  ---->>>  {t['end_loc']}")
-    
-    # Termék adatok
-    y -= 40
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, y, "TERMÉK INFORMÁCIÓ")
-    c.setFont("Helvetica", 11)
-    y -= 20
-    c.drawString(60, y, f"Megnevezés: {t['item']}")
-    y -= 15
-    c.setFont("Helvetica-Oblique", 10)
-    c.drawString(60, y, f"Leírás: {t.get('description', 'Nincs leírás')}")
-    
-    # Pénzügyi részletezés
-    y -= 50
-    c.line(50, y+10, width - 50, y+10)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, y, "KÖLTSÉGVETÉS")
-    c.setFont("Helvetica", 11)
-    y -= 20
-    c.drawString(60, y, f"Termék eredeti ára: {t['price']} Ft")
-    y -= 15
-    c.drawString(60, y, f"Szállítási díj: 990 Ft")
-    y -= 30
+    c.drawString(50, 800, "INVOICE / SZÁMLA")
+    c.setFont("Helvetica", 12)
+    c.drawString(50, 770, f"ID: {tid} | Idő: {t.get('accepted_at', 'N/A')}")
+    c.line(50, 760, 550, 760)
+    c.drawString(50, 730, f"Feladó: {t['sender']} | Címzett: {t['receiver']}")
+    c.drawString(50, 710, f"Útvonal: {t['start_loc']} -> {t['end_loc']}")
+    c.drawString(50, 680, f"Termék: {t['item']}")
     c.setFont("Helvetica-Bold", 14)
     c.setFillColor(colors.red)
-    c.drawString(50, y, f"TELJES FIZETETT ÖSSZEG: {t['price'] + 990} Ft")
-    
+    c.drawString(50, 640, f"VÉGÖSSZEG: {t['price'] + 990} Ft")
     c.save()
     buf.seek(0)
     return buf
 
-# --- 4. LOGIN ÉS ONLINE LÉPÉS ---
+# --- 5. LOGIKA: LOGIN VAGY APP ---
 if 'username' not in st.session_state:
+    # --- CSAK A LOGIN LÁTSZIK ---
     st.title("🛡️ IRL LOGISTIC - LOGIN")
-    u = st.text_input("Felhasználónév").lower().strip()
-    p = st.text_input("Jelszó", type="password")
-    if st.button("Belépés") and u in USERS and USERS[u] == p:
-        st.session_state.username = u
+    with st.form("login_form"):
+        u = st.text_input("Felhasználónév").lower().strip()
+        p = st.text_input("Jelszó", type="password")
+        if st.form_submit_button("Belépés"):
+            if u in USERS and USERS[u] == p:
+                st.session_state.username = u
+                st.session_state.prev_states = {}
+                st.rerun()
+            else:
+                st.error("Hibás adatok!")
+else:
+    # --- CSAK AZ APP LÁTSZIK (Login eltűnik) ---
+    current_user = st.session_state.username
+    global_data["online_users"][current_user] = time.time()
+
+    # --- HANG JELZÉS ELLENŐRZÉSE ---
+    for tid, t in global_data["active_trades"].items():
+        if current_user in [t['sender'], t['receiver']]:
+            state_key = f"{tid}_{t['status']}_{t['state_text']}"
+            if tid in st.session_state.prev_states:
+                if st.session_state.prev_states[tid] != state_key:
+                    play_ping()
+                    st.toast(f"🔔 Frissítés: {t['item']}")
+            st.session_state.prev_states[tid] = state_key
+
+    # SIDEBAR
+    st.sidebar.title(f"Szia, {current_user.capitalize()}!")
+    
+    # --- KRITIKUS: HANG AKTIVÁLÓ GOMB ---
+    if st.sidebar.button("🔊 HANGOK AKTIVÁLÁSA"):
+        play_ping()
+        st.sidebar.success("Hangok engedélyezve!")
+
+    online_now = [u for u, last in global_data["online_users"].items() if time.time() - last < 10]
+    st.sidebar.write(f"🟢 Online: {', '.join(online_now)}")
+    st.sidebar.metric("Egyenleg", f"{global_data['balances'].get(current_user, 0)} Ft")
+    
+    if st.sidebar.button("Kijelentkezés"):
+        del st.session_state.username
         st.rerun()
-    st.stop()
 
-current_user = st.session_state.username
-global_data["online_users"][current_user] = time.time()
+    menu = st.tabs(["🚀 KÜLDÉS", "📋 CONTROL PANEL", "📜 HISTORY"])
 
-# --- 5. HANG JELZÉS ---
-def play_sound():
-    st.components.v1.html('<audio autoplay style="display:none;"><source src="https://raw.githubusercontent.com/rafaelreis-hotmart/Audio-Samples/master/notification.mp3" type="audio/mp3"></audio>', height=0)
-
-# --- 6. SIDEBAR ---
-st.sidebar.title(f"Üdv, {current_user.capitalize()}!")
-online_now = [u for u, last in global_data["online_users"].items() if time.time() - last < 10]
-st.sidebar.write(f"🟢 Online: {', '.join(online_now)}")
-st.sidebar.metric("Egyenleged", f"{global_data['balances'].get(current_user, 0)} Ft")
-
-menu = st.tabs(["🚀 KÜLDÉS", "📋 CONTROL PANEL", "📜 HISTORY"])
-
-# --- TAB 1: KÜLDÉS ---
-with menu[0]:
-    targets = [u for u in online_now if u != current_user]
-    if not targets: st.info("Nincs online partner.")
-    else:
-        target = st.selectbox("Címzett", targets)
-        c1, c2 = st.columns(2)
-        start = c1.selectbox("Indulás", ["Budapest HUB", "Catánia", "London", "New York"])
-        end = c1.selectbox("Célállomás", ["Budapest HUB", "Catánia", "London", "New York"])
-        price = c2.number_input("Ár (Ft)", min_value=0, value=1000)
-        item = c2.text_input("Termék neve")
-        desc = st.text_area("Termék leírása (Számlára kerül)")
-        photo = st.file_uploader("Fotó", type=['jpg', 'png'])
-        
-        if st.button("🚀 KÜLDÉS") and item and photo:
-            tid = f"TID-{int(time.time())}"
-            global_data["active_trades"][tid] = {
-                "sender": current_user, "receiver": target, "item": item, "description": desc,
-                "price": price, "status": "WAITING", "state_text": "Csomagolás alatt...",
-                "photo": photo, "start_loc": start, "end_loc": end,
-                "eta_time": datetime.now() + timedelta(minutes=5)
-            }
-            play_sound()
-            st.success("Kérelem elküldve!")
-            st.rerun()
-
-# --- TAB 2: CONTROL PANEL ---
-with menu[1]:
-    # Bejövő
-    reqs = {tid: t for tid, t in global_data["active_trades"].items() if t['receiver'] == current_user and t['status'] == "WAITING"}
-    for tid, t in reqs.items():
-        with st.container(border=True):
-            st.write(f"📩 **{t['sender']}** küldeménye: {t['item']}")
-            if st.button(f"ELFOGADOM ÉS FIZETEK ({t['price']+990} Ft)", key=f"acc_{tid}"):
-                cost = t["price"] + 990
-                if global_data["balances"][current_user] >= cost:
-                    global_data["balances"][current_user] -= cost
-                    global_data["balances"][t["sender"]] += (t["price"] + 495) # Ár + fél szállítás
-                    t["status"] = "ACCEPTED"
-                    t["accepted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    play_sound(); st.rerun()
-                else: st.error("Nincs elég pénzed!")
-
-    st.divider()
-
-    # Aktív folyamatok
-    active = {tid: t for tid, t in global_data["active_trades"].items() if t['status'] == "ACCEPTED"}
-    for tid, t in active.items():
-        with st.container(border=True):
-            st.write(f"🚚 **{t['item']}** | {t['start_loc']} -> {t['end_loc']}")
-            c_ctrl, c_info = st.columns(2)
+    with menu[0]:
+        targets = [u for u in online_now if u != current_user]
+        if not targets: st.info("Nincs online partner.")
+        else:
+            target = st.selectbox("Címzett", targets)
+            c1, c2 = st.columns(2)
+            start = c1.selectbox("Indulás", ["Budapest", "Catánia", "London", "New York"])
+            end = c1.selectbox("Cél", ["Budapest", "Catánia", "London", "New York"])
+            price = c2.number_input("Ár (Ft)", min_value=0, value=1000)
+            item = c2.text_input("Termék neve")
+            desc = st.text_area("Leírás")
+            photo = st.file_uploader("Fotó", type=['jpg', 'png'])
             
-            with c_ctrl:
-                if t["sender"] == current_user:
-                    # Állapot
-                    states = ["Csomagolás alatt...", "Úton a reptérre", "A levegőben ✈️", "Kiszállítás alatt", "A kapu előtt 🚪"]
-                    new_s = st.selectbox("Státusz", states, index=states.index(t["state_text"]) if t["state_text"] in states else 0, key=f"s_{tid}")
-                    if new_s != t["state_text"]:
-                        t["state_text"] = new_s; st.rerun()
-                    
-                    # ETA EDIT FIX
-                    with st.expander("⏱️ Érkezési idő (ETA) módosítása"):
-                        new_eta_min = st.number_input("Hány perc múlva érkezik?", 1, 120, 5, key=f"eta_val_{tid}")
-                        if st.button("IDŐ MENTÉSE", key=f"eta_btn_{tid}"):
-                            t["eta_time"] = datetime.now() + timedelta(minutes=new_eta_min)
-                            st.success("Idő frissítve!"); time.sleep(0.5); st.rerun()
-                else:
-                    st.info(f"📍 Helyzet: **{t['state_text']}**")
+            if st.button("🚀 KÜLDÉS"):
+                if item and photo:
+                    tid = f"TID-{int(time.time())}"
+                    global_data["active_trades"][tid] = {
+                        "sender": current_user, "receiver": target, "item": item, "description": desc,
+                        "price": price, "status": "WAITING", "state_text": "Várakozás...",
+                        "photo": photo, "start_loc": start, "end_loc": end,
+                        "eta_time": datetime.now() + timedelta(minutes=5)
+                    }
+                    play_ping()
+                    st.success("Küldve!"); st.rerun()
 
-            with c_info:
-                # Visszaszámláló megjelenítése
-                rem = (t["eta_time"] - datetime.now()).total_seconds()
-                if rem > 0:
-                    m, s = divmod(int(rem), 60)
-                    st.subheader(f"⏳ Érkezik: {m:02d}:{s:02d}")
-                else:
-                    st.success("✅ MEGÉRKEZETT!")
-                    if current_user == t["receiver"]:
-                        if st.button("ÁTVÉTEL IGAZOLÁSA", key=f"done_{tid}"):
+    with menu[1]:
+        # Bejövő trade-ek
+        reqs = {tid: t for tid, t in global_data["active_trades"].items() if t['receiver'] == current_user and t['status'] == "WAITING"}
+        for tid, t in reqs.items():
+            with st.container(border=True):
+                st.write(f"📩 **{t['sender']}** -> {t['item']}")
+                if st.button(f"ELFOGADOM ({t['price']+990} Ft)", key=f"acc_{tid}"):
+                    cost = t["price"] + 990
+                    if global_data["balances"][current_user] >= cost:
+                        global_data["balances"][current_user] -= cost
+                        global_data["balances"][t['sender']] += (t['price'] + 495)
+                        t["status"] = "ACCEPTED"
+                        t["accepted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        play_ping(); st.rerun()
+
+        st.divider()
+
+        # Folyamatban lévő trade-ek
+        active = {tid: t for tid, t in global_data["active_trades"].items() if t['status'] == "ACCEPTED"}
+        for tid, t in active.items():
+            with st.container(border=True):
+                st.write(f"🚚 **{t['item']}** | {t['start_loc']} -> {t['end_loc']}")
+                cl, cr = st.columns(2)
+                with cl:
+                    if t["sender"] == current_user:
+                        states = ["Csomagolás alatt...", "Úton a reptérre", "A levegőben ✈️", "Kiszállítás alatt", "A kapu előtt 🚪"]
+                        new_s = st.selectbox("Állapot", states, index=states.index(t["state_text"]) if t["state_text"] in states else 0, key=f"s_{tid}")
+                        if new_s != t["state_text"]:
+                            t["state_text"] = new_s; st.rerun()
+                    else:
+                        st.info(f"📍 Helyzet: **{t['state_text']}**")
+                with cr:
+                    rem = (t["eta_time"] - datetime.now()).total_seconds()
+                    if rem > 0:
+                        st.write(f"⏳ ETA: {int(rem//60):02d}:{int(rem%60):02d}")
+                    else:
+                        st.success("✅ MEGÉRKEZETT!")
+                        if current_user == t["receiver"] and st.button("ÁTVÉTEL", key=f"d_{tid}"):
                             t["status"] = "DONE"; st.rerun()
-                
-                # Számla gomb
-                pdf = create_pdf(t, tid)
-                st.download_button("📥 PDF SZÁMLA LETÖLTÉSE", data=pdf, file_name=f"szamla_{tid}.pdf", key=f"p_{tid}")
+                    
+                    pdf = create_pdf(t, tid)
+                    st.download_button("📥 SZÁMLA PDF", data=pdf, file_name=f"szamla_{tid}.pdf", key=f"p_{tid}")
 
-# --- TAB 3: HISTORY ---
-with menu[2]:
-    done = [t for t in global_data["active_trades"].values() if t['status'] == "DONE"]
-    if done: st.table(pd.DataFrame(done)[["sender", "receiver", "item", "price"]])
-
-# --- AUTO REFRESH ---
-time.sleep(3); st.rerun()
+    # --- AUTO-REFRESH ---
+    time.sleep(3)
+    st.rerun()
