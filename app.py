@@ -63,7 +63,7 @@ placeholder = st.empty() # Ez a "tiszta lap" tároló
 
 if 'username' not in st.session_state:
     with placeholder.container():
-        st.title("🛡️ IRL LOGISTIC - LOGIN")
+        st.title("bejelentkezés")
         u = st.text_input("Felhasználónév", key="login_u").lower().strip()
         p = st.text_input("Jelszó", type="password", key="login_p")
         if st.button("Belépés", key="login_btn"):
