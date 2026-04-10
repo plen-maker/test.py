@@ -90,7 +90,7 @@ if st.sidebar.button("Kijelentkezés"):
     st.rerun()
 
 # FŐ APP FELÜLET
-menu = st.tabs(["🚀 KÜLDÉS", "📋 CONTROL PANEL", "📜 HISTORY"])
+menu = st.tabs(["🚀 KÜLDÉS", "📋 felraktam a kezem", "📜 HISTORY"])
 
 with menu[0]:
     targets = [u for u in online_now if u != current_user]
