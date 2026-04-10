@@ -98,8 +98,8 @@ with menu[0]:
     else:
         target = st.selectbox("Címzett", targets)
         c1, c2 = st.columns(2)
-        start = c1.selectbox("Indulás", ["Budapest HUB", "Catánia", "London", "New York"])
-        end = c1.selectbox("Célállomás", ["Budapest HUB", "Catánia", "London", "New York"])
+        start = c1.selectbox("Indulás", ["Budapest HUB", "Catánia", "London", "New York", "Codeland" , "Catániai Félszigetek", "Nyauperth", "Macskatelep", "Tarantulai Fészkek"])
+        end = c1.selectbox("Célállomás", ["Budapest HUB", "Catánia", "London", "New York", "Codeland" , "Catániai Félszigetek", "Nyauperth", "Macskatelep", "Tarantulai Fészkek"])
         price = c2.number_input("Ár (Cam)", min_value=0, value=1000)
         item = c2.text_input("Termék neve")
         desc = st.text_area("Termék leírása")
