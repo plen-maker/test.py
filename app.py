@@ -17,7 +17,7 @@ def get_global_data():
         "online_users": {}, 
         "trade_history": [],
         "active_trades": {}, 
-        "balances": {"admin": 50000, "peti": 50000, "adel": 50000, "ddnemet": 50000, "Kormuranusz": 50000},
+        "balances": {"admin": 50000, "peti": 50000, "adel": 50000, "ddnemet": 50000, "kormuranusz": 50000},
         "base_gallery": []
     }
 
