@@ -1,16 +1,15 @@
-
-{
-  "name": "IRL Logistic Hub",
-  "short_name": "Logistic",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#0e1117",
-  "theme_color": "#ff4b4b",
+ {
+  "short_name": "Streamlit",
+  "name": "Streamlit",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2311/2311523.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "favicon_512.png",
+      "type": "image/png",
+      "sizes": "512x512"
     }
-  ]
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff"
 }
