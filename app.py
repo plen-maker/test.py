@@ -51,16 +51,21 @@ with st.sidebar:
         st.rerun()
 
 
-# --- STREAMLIT "SZAR" ELTÜNTETÉSE ---
-hide_st_style = """
+# --- TELJES STREAMLIT TISZTÍTÁS (Felső sáv + Manage app + Footer) ---
+hide_everything_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
             #stDecoration {display:none;}
+            [data-testid="stHeader"] {display:none;}
+            .stApp [data-testid="stToolbar"] {display:none;}
+            /* Az alsó 'Manage app' gomb elrejtése */
+            [data-testid="manage-app-button"] {display: none;}
+            .viewerBadge_container__1QSob {display: none;}
             </style>
             """
-st.markdown(hide_st_style, unsafe_allow_unsafe_content=True)
+st.markdown(hide_everything_style, unsafe_allow_html=True)
 
 # --- APP INTERFACE ---
 tabs = st.tabs(["🚀 KÜLDÉS", "📋 CONTROL PANEL"])
