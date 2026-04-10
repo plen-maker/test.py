@@ -26,7 +26,6 @@ USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99"}
 
 # --- 3. PROFI HANG FUNKCIÓ ---
 def play_ping():
-    # Megbízhatóbb hangforrás és kód
     audio_url = "https://www.soundjay.com/buttons/sounds/button-3.mp3"
     st.components.v1.html(f"""
         <script>
@@ -54,9 +53,12 @@ def create_pdf(t, tid):
     buf.seek(0)
     return buf
 
-# --- 5. LOGIKA: LOGIN VAGY APP ---
+# --- 5. SESSION STATE INICIALIZÁLÁS (A hiba javítása) ---
+if 'prev_states' not in st.session_state:
+    st.session_state.prev_states = {}
+
+# --- 6. LOGIKA: LOGIN VAGY APP ---
 if 'username' not in st.session_state:
-    # --- CSAK A LOGIN LÁTSZIK ---
     st.title("🛡️ IRL LOGISTIC - LOGIN")
     with st.form("login_form"):
         u = st.text_input("Felhasználónév").lower().strip()
@@ -64,12 +66,10 @@ if 'username' not in st.session_state:
         if st.form_submit_button("Belépés"):
             if u in USERS and USERS[u] == p:
                 st.session_state.username = u
-                st.session_state.prev_states = {}
                 st.rerun()
             else:
                 st.error("Hibás adatok!")
 else:
-    # --- CSAK AZ APP LÁTSZIK (Login eltűnik) ---
     current_user = st.session_state.username
     global_data["online_users"][current_user] = time.time()
 
@@ -77,6 +77,7 @@ else:
     for tid, t in global_data["active_trades"].items():
         if current_user in [t['sender'], t['receiver']]:
             state_key = f"{tid}_{t['status']}_{t['state_text']}"
+            # Itt már biztosan létezik a prev_states
             if tid in st.session_state.prev_states:
                 if st.session_state.prev_states[tid] != state_key:
                     play_ping()
@@ -86,7 +87,6 @@ else:
     # SIDEBAR
     st.sidebar.title(f"Szia, {current_user.capitalize()}!")
     
-    # --- KRITIKUS: HANG AKTIVÁLÓ GOMB ---
     if st.sidebar.button("🔊 HANGOK AKTIVÁLÁSA"):
         play_ping()
         st.sidebar.success("Hangok engedélyezve!")
@@ -114,20 +114,18 @@ else:
             desc = st.text_area("Leírás")
             photo = st.file_uploader("Fotó", type=['jpg', 'png'])
             
-            if st.button("🚀 KÜLDÉS"):
-                if item and photo:
-                    tid = f"TID-{int(time.time())}"
-                    global_data["active_trades"][tid] = {
-                        "sender": current_user, "receiver": target, "item": item, "description": desc,
-                        "price": price, "status": "WAITING", "state_text": "Várakozás...",
-                        "photo": photo, "start_loc": start, "end_loc": end,
-                        "eta_time": datetime.now() + timedelta(minutes=5)
-                    }
-                    play_ping()
-                    st.success("Küldve!"); st.rerun()
+            if st.button("🚀 KÜLDÉS") and item and photo:
+                tid = f"TID-{int(time.time())}"
+                global_data["active_trades"][tid] = {
+                    "sender": current_user, "receiver": target, "item": item, "description": desc,
+                    "price": price, "status": "WAITING", "state_text": "Várakozás...",
+                    "photo": photo, "start_loc": start, "end_loc": end,
+                    "eta_time": datetime.now() + timedelta(minutes=5)
+                }
+                play_ping()
+                st.success("Küldve!"); st.rerun()
 
     with menu[1]:
-        # Bejövő trade-ek
         reqs = {tid: t for tid, t in global_data["active_trades"].items() if t['receiver'] == current_user and t['status'] == "WAITING"}
         for tid, t in reqs.items():
             with st.container(border=True):
@@ -143,7 +141,6 @@ else:
 
         st.divider()
 
-        # Folyamatban lévő trade-ek
         active = {tid: t for tid, t in global_data["active_trades"].items() if t['status'] == "ACCEPTED"}
         for tid, t in active.items():
             with st.container(border=True):
@@ -152,7 +149,8 @@ else:
                 with cl:
                     if t["sender"] == current_user:
                         states = ["Csomagolás alatt...", "Úton a reptérre", "A levegőben ✈️", "Kiszállítás alatt", "A kapu előtt 🚪"]
-                        new_s = st.selectbox("Állapot", states, index=states.index(t["state_text"]) if t["state_text"] in states else 0, key=f"s_{tid}")
+                        curr_val = t["state_text"] if t["state_text"] in states else states[0]
+                        new_s = st.selectbox("Állapot", states, index=states.index(curr_val), key=f"s_{tid}")
                         if new_s != t["state_text"]:
                             t["state_text"] = new_s; st.rerun()
                     else:
