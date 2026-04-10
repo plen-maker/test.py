@@ -22,7 +22,7 @@ def get_global_data():
     }
 
 global_data = get_global_data()
-USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99", "Kormuranusz": "Kormicica", "ddnemet": "koficcica"}
+USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99", "kormuranusz": "kormicica", "ddnemet": "koficcica"}
 
 # --- 3. PROFI SZÁMLA GENERÁLÓ ---
 def create_pdf(t, tid):
