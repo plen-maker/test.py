@@ -1,5 +1,5 @@
 
-import streamlit as st
+import streamlit as sr
 import time
 import pandas as pd
 from datetime import datetime, timedelta
@@ -12,7 +12,7 @@ from reportlab.lib import colors
 st.set_page_config(page_title="Tréd🔥🔥🔥", layout="wide", page_icon="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTq9xFPrGZcuBi4sGho51wcEmiwO7M_cN35kQ&s")
 
 # --- 2. KÖZÖS MEMÓRIA ---
-@st.cache_resource
+@sr.cache_resource
 def get_global_data():
     return {
         "online_users": {}, 
