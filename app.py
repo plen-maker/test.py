@@ -51,10 +51,10 @@ def create_pdf(t, tid):
     y -= 50; c.line(50, y+10, width - 50, y+10)
     c.setFont("Helvetica-Bold", 12); c.drawString(50, y, "KÖLTSÉGVETÉS")
     c.setFont("Helvetica", 11); y -= 20
-    c.drawString(60, y, f"Termék eredeti ára: {t['price']} Ft")
-    y -= 15; c.drawString(60, y, f"Szállítási díj: 990 Ft")
+    c.drawString(60, y, f"Termék eredeti ára: {t['price']} Cam")
+    y -= 15; c.drawString(60, y, f"Szállítási díj: 990 Cam")
     y -= 30; c.setFont("Helvetica-Bold", 14); c.setFillColor(colors.red)
-    c.drawString(50, y, f"TELJES FIZETETT ÖSSZEG: {t['price'] + 990} Ft")
+    c.drawString(50, y, f"TELJES FIZETETT ÖSSZEG: {t['price'] + 990} Cam")
     c.save(); buf.seek(0)
     return buf
 
@@ -83,7 +83,7 @@ global_data["online_users"][current_user] = time.time()
 st.sidebar.title(f"Üdv, {current_user.capitalize()}!")
 online_now = [u for u, last in global_data["online_users"].items() if time.time() - last < 10]
 st.sidebar.write(f"🟢 Online: {', '.join(online_now)}")
-st.sidebar.metric("Egyenleged", f"{global_data['balances'].get(current_user, 0)} Ft")
+st.sidebar.metric("Egyenleged", f"{global_data['balances'].get(current_user, 0)} Cam")
 
 if st.sidebar.button("Kijelentkezés"):
     del st.session_state.username
@@ -100,7 +100,7 @@ with menu[0]:
         c1, c2 = st.columns(2)
         start = c1.selectbox("Indulás", ["Budapest HUB", "Catánia", "London", "New York"])
         end = c1.selectbox("Célállomás", ["Budapest HUB", "Catánia", "London", "New York"])
-        price = c2.number_input("Ár (Ft)", min_value=0, value=1000)
+        price = c2.number_input("Ár (Cam)", min_value=0, value=1000)
         item = c2.text_input("Termék neve")
         desc = st.text_area("Termék leírása")
         photo = st.file_uploader("Fotó", type=['jpg', 'png'])
@@ -120,7 +120,7 @@ with menu[1]:
     for tid, t in reqs.items():
         with st.container(border=True):
             st.write(f"📩 **{t['sender']}** -> {t['item']}")
-            if st.button(f"ELFOGADOM ({t['price']+990} Ft)", key=f"acc_{tid}"):
+            if st.button(f"ELFOGADOM ({t['price']+990} Cam)", key=f"acc_{tid}"):
                 cost = t["price"] + 990
                 if global_data["balances"][current_user] >= cost:
                     global_data["balances"][current_user] -= cost
