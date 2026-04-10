@@ -1,1 +1,16 @@
 
+{
+  "name": "IRL Logistic Hub",
+  "short_name": "Logistic",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1117",
+  "theme_color": "#ff4b4b",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2311/2311523.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
