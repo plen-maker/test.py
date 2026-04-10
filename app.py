@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
 # --- 1. OLDAL BEÁLLÍTÁSA ---
-st.set_page_config(page_title="IRL LOGISTIC HUB", layout="wide", page_icon="🚚")
+st.set_page_config(page_title="Tréd🔥🔥🔥", layout="wide", page_icon="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTq9xFPrGZcuBi4sGho51wcEmiwO7M_cN35kQ&s")
 
 # --- 2. KÖZÖS MEMÓRIA ---
 @st.cache_resource
@@ -17,7 +17,7 @@ def get_global_data():
         "online_users": {}, 
         "trade_history": [],
         "active_trades": {}, 
-        "balances": {"admin": 50000, "peti": 50000, "adel": 50000},
+        "balances": {"admin": 50000, "peti": 50000, "adel": 50000, "ddnemet": 50000, "Kormuranusz": 50000},
         "base_gallery": []
     }
 
