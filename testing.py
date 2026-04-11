@@ -27,6 +27,51 @@ try:
 except Exception as e:
     st.error(f"Firebase initialization error: {e}")
 
+st.components.v1.html("""
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
+
+<script>
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDZb9bdfMFfzBRKM7bMO7GbvIH5CutYZB0",
+  authDomain: "cattrade-591fb.firebaseapp.com",
+  projectId: "cattrade-591fb",
+  messagingSenderId: "168227931827",
+  appId: "1:168227931827:web:07fb9c3de0be56395252c6"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const messaging = firebase.messaging();
+
+Notification.requestPermission().then(permission => {
+  if (permission === "granted") {
+    messaging.getToken().then(token => {
+      console.log("TOKEN:", token);
+      alert("TOKEN:\\n" + token);
+    });
+  }
+});
+
+</script>
+""", height=0)
+
+def send_msg(to_user, text, mtype="info"):
+    # Ellenőrizzük, hogy van-e már üzenetlista az adott usernek
+    if to_user not in global_data["messages"]:
+        global_data["messages"][to_user] = []
+    
+    # Új üzenet objektum
+    new_msg = {
+        "from": current_user,
+        "text": text,
+        "type": mtype,
+        "ts": datetime.now().strftime("%H:%M:%S"),
+        "read": False
+    }
+    global_data["messages"][to_user].append(new_msg)
+
 st.set_page_config(
     page_title="Tréd🔥🔥🔥", layout="wide",
     page_icon="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTq9xFPrGZcuBi4sGho51wcEmiwO7M_cN35kQ&s"
@@ -601,6 +646,28 @@ with st.sidebar:
         del st.session_state.username
         global_data["bank_sessions"].pop(current_user,None)
         st.rerun()
+        with st.sidebar:
+    # ... egyenleg megjelenítése ...
+
+    st.markdown("### 🔔 Értesítések")
+    
+    # Lekérjük a JELENLEGI FELHASZNÁLÓ üzeneteit
+    sajat_uzeneteim = global_data["messages"].get(current_user, [])
+    
+    if not sajat_uzeneteim:
+        st.write("Nincs új üzenet 😸")
+    else:
+        for m in reversed(sajat_uzeneteim[-5:]): # Csak az utolsó 5-öt mutatjuk
+            st.markdown(f"""
+            <div style="background: rgba(102,126,234,0.1); border-left: 3px solid #667eea; padding: 10px; border-radius: 5px; margin-bottom: 5px;">
+                <small style="color: #888;">{m['ts']}</small><br>
+                <b style="color: #ddd;">{m['text']}</b>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        if st.button("🗑️ Üzenetek törlése"):
+            global_data["messages"][current_user] = []
+            st.rerun()
 
 # ─────────────────────────────────────────────
 # MAIN TABS
@@ -658,6 +725,34 @@ with menu[0]:
                     st.markdown("<script>fullAlert('send');</script>", unsafe_allow_html=True)
                     st.success(f"🐾 Elküldve! Order: {oid}")
                     st.rerun()
+if st.button("🚀 KÜLDÉS", use_container_width=True):
+    if not item.strip():
+        st.warning("Add meg a termék nevét! 😾")
+    else:
+        # --- EZ A RÉSZ KÜLDI AZ ÜZENETET ---
+        tid = f"TID-{int(time.time())}"
+        oid = next_order_id()
+        
+        # 1. Elmentjük a tranzakciót (ez már megvan neked)
+        global_data["active_trades"][tid] = {
+            "order_id": oid, "sender": current_user, "receiver": target,
+            "item": item.strip(), "price": price, "status": "WAITING",
+            # ... többi adatod ...
+        }
+        
+        # 2. TÉNYLEGES ÜZENETKÜLDÉS A MÁSIKNAK
+        if target not in global_data["messages"]:
+            global_data["messages"][target] = []
+            
+        global_data["messages"][target].append({
+            "text": f"📦 Új ajánlat tőle: {current_user.capitalize()}! Termék: {item.strip()} - {price} Cam",
+            "type": "info",
+            "ts": datetime.now().strftime("%H:%M:%S"),
+            "read": False
+        })
+        
+        st.success(f"🐾 Elküldve! Az üzenet megérkezett {target} fiókjába.")
+        st.rerun()
 
         with col_prev:
             p = st.session_state.get("send_price",1000)
