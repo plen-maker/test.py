@@ -7,6 +7,36 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
+st.components.v1.html("""
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
+
+<script>
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDZb9bdfMFfzBRKM7bMO7GbvIH5CutYZB0",
+  authDomain: "cattrade-591fb.firebaseapp.com",
+  projectId: "cattrade-591fb",
+  messagingSenderId: "168227931827",
+  appId: "1:168227931827:web:07fb9c3de0be56395252c6"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const messaging = firebase.messaging();
+
+Notification.requestPermission().then(permission => {
+  if (permission === "granted") {
+    messaging.getToken().then(token => {
+      console.log("TOKEN:", token);
+      alert("TOKEN:\\n" + token);
+    });
+  }
+});
+
+</script>
+""", height=0)
+
 st.set_page_config(
     page_title="Tréd🔥🔥🔥", layout="wide",
     page_icon="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTq9xFPrGZcuBi4sGho51wcEmiwO7M_cN35kQ&s"
