@@ -18,7 +18,7 @@ st.markdown("""
     </style>
     <div class="update-container">
         <h1>🛠️ AZ APP FRISSÍTÉS ALATT ÁLL</h1>
-        <p>Éppen kalapáljuk a rendszert. Kérlek nézz vissza 15 perc múlva!</p>
-        <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJueGZ3bmZ3bmZ3bmZ3bmZ3bmZ3bmZ3bmZ3bmZ3bmZ3bmZ3/3o7TKMGpxxca6X3Sms/giphy.gif" width="300">
+        <p>Éppen kalapáljuk a rendszert. Kérlek nézz vissza 67 perc múlva!</p>
+        <img src="https://cdn2.cdnstep.com/Ml7lEe4GqrgiS74oO07o/cover.thumb256.webp">
     </div>
     """, unsafe_allow_html=True)
