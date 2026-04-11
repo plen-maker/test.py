@@ -18,7 +18,7 @@ st.markdown("""
     </style>
     <div class="update-container">
         <h1>🛠️ AZ APP FRISSÍTÉS ALATT ÁLL</h1>
-        <p>Éppen kalapáljuk a rendszert. Kérlek nézz vissza 67 perc múlva!</p>
+        <p>Éppen kalapáljuk a rendszert. Kérlek nézz vissza 858736875673ö567ö93563578656735698475673456346345734645634563436 perc múlva!</p>
         <img src="https://cdn2.cdnstep.com/Ml7lEe4GqrgiS74oO07o/cover.thumb256.webp">
     </div>
     """, unsafe_allow_html=True)
