@@ -6,6 +6,26 @@ from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
+import os
+import firebase_admin
+from firebase_admin import credentials, messaging
+
+# ─────────────────────────────────────────────
+# FIREBASE ADMIN SDK INITIALIZATION
+# ─────────────────────────────────────────────
+try:
+    if not firebase_admin._apps:
+        # The key file is in the parent directory of this file (test.py/testing.py -> ../key.json)
+        key_path = os.path.join(os.getcwd(), "cattrade-591fb-firebase-adminsdk-fbsvc-8cbfef732c.json")
+        if not os.path.exists(key_path):
+            # Try relative to the script
+            key_path = os.path.join(os.path.dirname(__file__), "..", "cattrade-591fb-firebase-adminsdk-fbsvc-8cbfef732c.json")
+        
+        if os.path.exists(key_path):
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred)
+except Exception as e:
+    st.error(f"Firebase initialization error: {e}")
 
 st.set_page_config(
     page_title="Tréd🔥🔥🔥", layout="wide",
@@ -174,7 +194,41 @@ function stopNFC(statusId) {
     const el = document.getElementById('nfc-status-'+(statusId||''));
     if(el) el.innerHTML='⏹️ NFC leállítva.';
 }
+
+// ── FIREBASE FCM ─────────────────────────────
+async function initFCM(vapidKey) {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+        const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+        const config = {
+            apiKey: "AIzaSyDZb9bdfMFfzBRKM7bMO7GbvIH5CutYZB0",
+            authDomain: "cattrade-591fb.firebaseapp.com",
+            projectId: "cattrade-591fb",
+            storageBucket: "cattrade-591fb.firebasestorage.app",
+            messagingSenderId: "168227931827",
+            appId: "1:168227931827:web:07fb9c3de0be56395252c6",
+            measurementId: "G-F842ZDDB53"
+        };
+        firebase.initializeApp(config);
+        const messaging = firebase.messaging();
+        
+        const token = await messaging.getToken({ serviceWorkerRegistration: reg, vapidKey: vapidKey });
+        if (token) {
+            console.log("FCM Token acquired");
+            // Send token to Streamlit via a hidden input or similar
+            const input = window.parent.document.querySelector('input[aria-label="fcm_token_input"]');
+            if (input) {
+                const lastValue = input.value;
+                input.value = token;
+                const event = new Event('input', { bubbles: true });
+                input.dispatchEvent(event);
+            }
+        }
+    } catch (e) { console.error("FCM Init Error:", e); }
+}
 </script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
 """
 
 STYLE = """
@@ -252,6 +306,10 @@ footer { visibility: hidden; }
     from { box-shadow: 0 0 0 0 rgba(245,87,108,0.6); }
     to   { box-shadow: 0 0 16px 4px rgba(245,87,108,0.3); }
 }
+/* Hide the FCM token input */
+div[data-testid="stTextInput"]:has(input[aria-label="fcm_token_input"]) {
+    display: none !important;
+}
 </style>
 """
 
@@ -272,7 +330,8 @@ def get_global_data():
         "online_users": {}, "active_trades": {},
         "balances": {"admin":50000,"peti":50000,"adel":50000,"ddnemet":50000,"kormuranusz":50000},
         "messages": {}, "eta_notified": set(), "order_counter": [1000],
-        "bank_pins": {}, "bank_sessions": {}, "last_msg_count": {}
+        "bank_pins": {}, "bank_sessions": {}, "last_msg_count": {},
+        "fcm_tokens": {}
     }
 
 global_data = get_global_data()
@@ -285,6 +344,23 @@ def next_order_id():
 def send_msg(user, text, mtype="info"):
     global_data["messages"].setdefault(user, []).append(
         {"text":text,"type":mtype,"ts":datetime.now().strftime("%H:%M:%S"),"read":False})
+    # Also trigger FCM
+    send_fcm_notification(user, "TRÉD Értesítés", text)
+
+def send_fcm_notification(user, title, text):
+    token = global_data["fcm_tokens"].get(user)
+    if token:
+        try:
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=title,
+                    body=text,
+                ),
+                token=token,
+            )
+            messaging.send(message)
+        except Exception as e:
+            print(f"FCM Error for {user}: {e}")
 
 def unread(user):
     return [m for m in global_data["messages"].get(user,[]) if not m["read"]]
@@ -422,6 +498,12 @@ def create_pdf(t, tid):
 # ─────────────────────────────────────────────
 st.markdown(STYLE, unsafe_allow_html=True)
 st.markdown(JS_ALL, unsafe_allow_html=True)
+st.markdown(f"<script>initFCM('VyDf5IEpIo2PmkQRQZPzU1jmBrMiO_MlQHAMa9zs6oo');</script>", unsafe_allow_html=True)
+
+# FCM Token handling
+fcm_token = st.text_input("fcm_token_input", label_visibility="collapsed", key="fcm_token_hidden")
+if fcm_token and "username" in st.session_state:
+    global_data["fcm_tokens"][st.session_state.username] = fcm_token
 
 # ─────────────────────────────────────────────
 # LOGIN
