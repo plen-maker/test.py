@@ -163,4 +163,3 @@ with menu[1]:
 # AUTOMATIKUS OLDALFRISSÍTÉS 3 MÁSODPERCENKÉNT
 time.sleep(3)
 st.rerun()
-
