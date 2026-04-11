@@ -245,9 +245,10 @@ async function initFCM(vapidKey) {
         }
     } catch (e) { 
         console.error("FCM Init Error:", e);
-        // Alert the user if it's a 404 for the SW
-        if (e.message && e.message.includes('404')) {
-            console.warn("Service worker not found at /static/firebase-messaging-sw.js");
+        const input = window.parent.document.querySelector('input[aria-label="fcm_token_input"]');
+        if (input) {
+            input.value = "ERROR: " + e.message;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 }
@@ -536,7 +537,11 @@ st.markdown(f"<script>initFCM('VyDf5IEpIo2PmkQRQZPzU1jmBrMiO_MlQHAMa9zs6oo');</s
 # FCM Token handling
 fcm_token = st.text_input("fcm_token_input", label_visibility="collapsed", key="fcm_token_hidden")
 if fcm_token and "username" in st.session_state:
-    global_data["fcm_tokens"][st.session_state.username] = fcm_token
+    if fcm_token.startswith("ERROR:"):
+        st.session_state["fcm_error"] = fcm_token
+    else:
+        global_data["fcm_tokens"][st.session_state.username] = fcm_token
+        st.session_state.pop("fcm_error", None)
 
 # ─────────────────────────────────────────────
 # LOGIN
@@ -603,8 +608,13 @@ with st.sidebar:
     if cur_unreads:
         st.markdown(f'<div class="notif-banner">🔔 {len(cur_unreads)} új értesítés!</div>', unsafe_allow_html=True)
         # Debug FCM status
-        has_token = current_user in global_data["fcm_tokens"]
-        st.markdown(f"<div style='font-size:10px;color:{'#43e97b' if has_token else '#f5576c'}'>FCM: {'OK' if has_token else 'Hiányzik'}</div>", unsafe_allow_html=True)
+        token = global_data["fcm_tokens"].get(current_user)
+        if "fcm_error" in st.session_state:
+            st.error(f"FCM: {st.session_state['fcm_error']}")
+        else:
+            st.markdown(f"<div style='font-size:10px;color:{'#43e97b' if token else '#f5576c'}'>FCM: {'OK' if token else 'Hiányzik'}</div>", unsafe_allow_html=True)
+            if token:
+                st.caption(f"Token: {token[:15]}...")
         
         for m in cur_unreads[-6:]:
             icon="🙀" if m["type"]=="alert" else "😺"
