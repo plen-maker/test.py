@@ -7,10 +7,35 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
-# --- 1. KONFIGURÁCIÓ ---
-st.set_page_config(page_title="IRL LOGISTIC HUB", layout="wide", page_icon="🚚")
+# --- 1. TELJES REKLÁM ÉS SÁV ELTÜNTETÉS (CSS) ---
+st.set_page_config(page_title="Cattrade LOGISTIC", layout="wide", page_icon="🚚")
 
-# --- 2. ADATBÁZIS ---
+st.markdown("""
+    <style>
+    /* Elrejti a Streamlit menüt, a láblécet és a fejlécet */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Elrejti a felső fekete PWA sávot és a csillagot */
+    div.st-emotion-cache-18ni7ap {visibility: hidden; height: 0;}
+    div.st-emotion-cache-1h6d29n {visibility: hidden; height: 0;}
+    [data-testid="stHeader"] {display: none;}
+
+    /* Teljes szélességű tartalom, sávok nélkül */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 0rem;
+    }
+    
+    /* APK nézet optimalizálás: ne lehessen vízszintesen görgetni */
+    html, body {
+        overflow-x: hidden;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. KÖZÖS ADATOK (MEMÓRIA) ---
 @st.cache_resource
 def get_global_data():
     return {
@@ -22,71 +47,72 @@ def get_global_data():
 global_data = get_global_data()
 USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99"}
 
-# --- 3. SZÁMLA PDF ---
+# --- 3. LOGIN RENDSZER (ÜRES TÁROLÓVAL A TISZTA TÖRLÉSHEZ) ---
+login_placeholder = st.empty()
+
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    with login_placeholder.container():
+        st.title("🛡️ IRL LOGISTIC - LOGIN")
+        u = st.text_input("Felhasználónév", key="l_user").lower().strip()
+        p = st.text_input("Jelszó", type="password", key="l_pass")
+        if st.button("Belépés", key="l_btn"):
+            if u in USERS and USERS[u] == p:
+                st.session_state.authenticated = True
+                st.session_state.username = u
+                login_placeholder.empty() # Fizikailag kitörli a login mezőket
+                st.rerun()
+            else:
+                st.error("Hibás adatok!")
+    st.stop()
+
+# --- 4. SZÁMLA PDF GENERÁTOR ---
 def create_pdf(t, tid):
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     c.setFont("Helvetica-Bold", 20)
     c.drawString(50, 800, "HIVATALOS SZÁMLA")
     c.setFont("Helvetica", 12)
-    c.drawString(50, 770, f"ID: {tid}")
+    c.drawString(50, 770, f"Tranzakció ID: {tid}")
     c.drawString(50, 750, f"Feladó: {t['sender']} | Címzett: {t['receiver']}")
     c.drawString(50, 730, f"Termék: {t['item']}")
-    c.drawString(50, 700, f"Összeg: {t['price'] + 990} Ft")
+    c.drawString(50, 710, f"Összeg: {t['price'] + 990} Ft")
     c.save()
     buf.seek(0)
     return buf
 
-# --- 4. LOGIN RENDSZER (placeholder-rel a tiszta törlésért) ---
-login_space = st.empty()
-
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-
-if not st.session_state.authenticated:
-    with login_space.container():
-        st.title("🛡️ IRL LOGISTIC - LOGIN")
-        u = st.text_input("Felhasználónév", key="main_user_in").lower().strip()
-        p = st.text_input("Jelszó", type="password", key="main_pass_in")
-        if st.button("Belépés", key="main_login_btn"):
-            if u in USERS and USERS[u] == p:
-                st.session_state.authenticated = True
-                st.session_state.username = u
-                login_space.empty() # FIZIKAILAG TÖRÖL MINDENT A LOGINBÓL
-                st.rerun()
-            else:
-                st.error("Hibás adatok!")
-    st.stop() # Megállítja a futást, a lenti kód el sem indul belépés nélkül
-
-# --- 5. AZ APP (Csak sikeres login után) ---
+# --- 5. AZ APP FELÜLETE (BEJELENTKEZÉS UTÁN) ---
 current_user = st.session_state.username
 global_data["online_users"][current_user] = time.time()
 
-# SIDEBAR
+# SIDEBAR (Oldalsáv)
 st.sidebar.title(f"Szia, {current_user.capitalize()}!")
 online_now = [u for u, last in global_data["online_users"].items() if time.time() - last < 10]
 st.sidebar.write(f"🟢 Online: {', '.join(online_now)}")
-st.sidebar.metric("Egyenleg", f"{global_data['balances'].get(current_user, 0)} Ft")
+st.sidebar.metric("Egyenleged", f"{global_data['balances'].get(current_user, 0)} Ft")
 
 if st.sidebar.button("Kijelentkezés"):
-    del st.session_state.authenticated
-    del st.session_state.username
+    st.session_state.authenticated = False
     st.rerun()
 
-# FUNKCIÓK
+# FŐ TARTALOM (TABS)
 menu = st.tabs(["🚀 KÜLDÉS", "📋 CONTROL PANEL", "📜 HISTORY"])
 
 with menu[0]:
     targets = [u for u in online_now if u != current_user]
-    if not targets: st.info("Nincs online partner.")
+    if not targets: 
+        st.info("Nincs online partner jelenleg.")
     else:
-        target = st.selectbox("Címzett", targets)
+        target = st.selectbox("Válassz címzettet", targets)
         c1, c2 = st.columns(2)
-        start = c1.selectbox("Indulás", ["Budapest HUB", "London", "New York"])
-        end = c1.selectbox("Célállomás", ["Budapest HUB", "London", "New York"])
-        price = c2.number_input("Ár (Ft)", min_value=0, value=1000)
-        item = c2.text_input("Termék neve")
-        if st.button("🚀 KÜLDÉS"):
+        start = c1.selectbox("Indulási pont", ["Budapest HUB", "London", "New York", "Catania"])
+        end = c1.selectbox("Célállomás", ["Budapest HUB", "London", "New York", "Catania"])
+        price = c2.number_input("Termék ára (Ft)", min_value=0, value=1000)
+        item = c2.text_input("Mi van a csomagban?")
+        
+        if st.button("🚀 KÜLDÉS INDÍTÁSA"):
             if item:
                 tid = f"TID-{int(time.time())}"
                 global_data["active_trades"][tid] = {
@@ -95,15 +121,15 @@ with menu[0]:
                     "start_loc": start, "end_loc": end,
                     "eta_time": datetime.now() + timedelta(minutes=5)
                 }
-                st.success("Küldve!"); st.rerun()
+                st.success("Csomag regisztrálva!"); st.rerun()
 
 with menu[1]:
-    # Bejövő és folyamatban lévő trade-ek
+    # Bejövő kérések (amire várjuk az elfogadást)
     reqs = {tid: t for tid, t in global_data["active_trades"].items() if t['receiver'] == current_user and t['status'] == "WAITING"}
     for tid, t in reqs.items():
         with st.container(border=True):
-            st.write(f"📩 **{t['sender']}** -> {t['item']}")
-            if st.button(f"ELFOGADOM ({t['price']+990} Ft)", key=f"acc_{tid}"):
+            st.write(f"📩 **{t['sender']}** küldött neked valamit: **{t['item']}**")
+            if st.button(f"ELFOGADOM ÉS FIZETEK ({t['price']+990} Ft)", key=f"acc_{tid}"):
                 cost = t["price"] + 990
                 if global_data["balances"][current_user] >= cost:
                     global_data["balances"][current_user] -= cost
@@ -111,22 +137,30 @@ with menu[1]:
                     t["status"] = "ACCEPTED"
                     t["accepted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                     st.rerun()
+                else:
+                    st.error("Nincs elég egyenleged!")
 
     st.divider()
+    # Aktív folyamatok (szállítás alatt)
     active = {tid: t for tid, t in global_data["active_trades"].items() if t['status'] == "ACCEPTED"}
     for tid, t in active.items():
         with st.container(border=True):
             st.write(f"🚚 **{t['item']}** | {t['start_loc']} -> {t['end_loc']}")
+            
+            # Csak a küldő tud státuszt állítani
             if t["sender"] == current_user:
-                states = ["Csomagolás alatt...", "Úton...", "A levegőben ✈️", "Kiszállítás alatt"]
-                new_s = st.selectbox("Státusz", states, key=f"s_{tid}")
+                states = ["Csomagolás alatt...", "Úton a reptérre", "A levegőben ✈️", "Kiszállítás alatt", "Megérkezett! ✅"]
+                new_s = st.selectbox("Helyzet frissítése", states, key=f"s_{tid}")
                 if new_s != t["state_text"]:
                     t["state_text"] = new_s; st.rerun()
             else:
-                st.info(f"📍 Helyzet: {t['state_text']}")
+                st.info(f"📍 Jelenlegi állapot: {t['state_text']}")
             
-            pdf = create_pdf(t, tid)
-            st.download_button("📥 SZÁMLA PDF", data=pdf, file_name=f"szamla_{tid}.pdf", key=f"p_{tid}")
+            # Számla letöltés
+            pdf_file = create_pdf(t, tid)
+            st.download_button("📥 SZÁMLA (PDF)", data=pdf_file, file_name=f"szamla_{tid}.pdf", key=f"p_{tid}")
 
-# AUTO REFRESH
-time.sleep(3); st.rerun()
+# AUTOMATIKUS OLDALFRISSÍTÉS 3 MÁSODPERCENKÉNT
+time.sleep(3)
+st.rerun()
+
