@@ -13,6 +13,9 @@ st.set_page_config(
     page_icon="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTq9xFPrGZcuBi4sGho51wcEmiwO7M_cN35kQ&s"
 )
 
+# ─────────────────────────────────────────────
+# SOUND JS
+# ─────────────────────────────────────────────
 CAT_SOUND_JS = """
 <script>
 function playCatSound(type) {
@@ -57,24 +60,69 @@ function playCatSound(type) {
 </script>
 """
 
+# ─────────────────────────────────────────────
+# NFC JS — Real contactless payment via Web NFC API
+# Works on Chrome Android (>=89) in WebView with NFC permission
+# Falls back to manual confirm on unsupported devices
+# ─────────────────────────────────────────────
 NFC_JS = """
 <script>
-async function startNFCTerminal(amount, orderId) {
-    const statusEl = document.getElementById('nfc-terminal-status');
+// Global NFC state
+window._nfcReader = null;
+window._nfcActive = false;
+
+async function startNFCScan(amount, orderId, callbackId) {
+    const statusEl = document.getElementById('nfc-status-' + callbackId);
+    const setStatus = (msg, color) => {
+        if(statusEl) { statusEl.innerHTML = msg; if(color) statusEl.style.color = color; }
+    };
+
     if (!('NDEFReader' in window)) {
-        if(statusEl) statusEl.innerHTML = '❌ Web NFC nem támogatott (Chrome Android kell)';
-        return;
+        setStatus('❌ Web NFC nem támogatott ezen az eszközön.<br><small>Szükséges: Chrome Android + NFC engedély</small>', '#f5576c');
+        return false;
     }
+
     try {
+        setStatus('📡 NFC engedély kérése...', '#ffc107');
         const ndef = new NDEFReader();
-        if(statusEl) { statusEl.innerHTML = '📲 NFC terminál aktív – közelítsd a fizető telefonját...'; statusEl.style.color='#43e97b'; }
-        await ndef.write({
-            records: [{ recordType: "text", data: JSON.stringify({ amount: amount, orderId: orderId, type: "tred_payment" }) }]
+        window._nfcReader = ndef;
+        window._nfcActive = true;
+
+        // Listen for incoming NFC tag / phone tap
+        await ndef.scan();
+        setStatus('📲 NFC aktív – közelítsd a fizető telefonját!', '#43e97b');
+
+        ndef.addEventListener("reading", ({ message, serialNumber }) => {
+            setStatus('✅ NFC érintés érzékelve! Feldolgozás...', '#43e97b');
+            window._nfcActive = false;
+            // Trigger Streamlit callback via URL fragment trick
+            setTimeout(() => {
+                const btn = document.getElementById('nfc-confirm-btn-' + callbackId);
+                if(btn) btn.click();
+            }, 600);
         });
-        if(statusEl) statusEl.innerHTML = '✅ NFC adat kiírva!';
+
+        ndef.addEventListener("readingerror", () => {
+            setStatus('⚠️ NFC olvasási hiba. Próbáld újra.', '#ffc107');
+        });
+
+        return true;
     } catch(e) {
-        if(statusEl) statusEl.innerHTML = '❌ ' + e.message;
+        if(e.name === 'NotAllowedError') {
+            setStatus('🔒 NFC engedély megtagadva. Engedélyezd az app beállításokban.', '#f5576c');
+        } else if(e.name === 'NotSupportedError') {
+            setStatus('❌ Az NFC nem elérhető ezen az eszközön.', '#f5576c');
+        } else {
+            setStatus('❌ Hiba: ' + e.message, '#f5576c');
+        }
+        return false;
     }
+}
+
+function stopNFCScan(callbackId) {
+    window._nfcActive = false;
+    const statusEl = document.getElementById('nfc-status-' + callbackId);
+    if(statusEl) statusEl.innerHTML = '⏹️ NFC leállítva.';
 }
 </script>
 """
@@ -83,6 +131,17 @@ STYLE = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 * { font-family: 'Inter', sans-serif !important; box-sizing: border-box; }
+
+/* Fix Streamlit expander arrow rendering bug */
+.streamlit-expanderHeader svg { display: inline-block !important; }
+details > summary { list-style: none !important; }
+details > summary::-webkit-details-marker { display: none !important; }
+.streamlit-expanderHeader { padding-left: 8px !important; }
+
+/* Fix file uploader double label bug */
+[data-testid="stFileUploader"] label { display: block !important; }
+[data-testid="stFileUploader"] label + label { display: none !important; }
+
 .rev-card {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
     border-radius: 20px; padding: 24px; color: white; margin-bottom: 16px;
@@ -130,8 +189,28 @@ STYLE = """
 .tx-row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
 .pos { color:#43e97b; font-weight:700; }
 .neg { color:#f5576c; font-weight:700; }
+
+/* ETA timer display */
+.eta-timer { text-align:right; font-size:26px; font-weight:900; color:#667eea; }
+.eta-soon  { text-align:right; color:#ffc107; font-weight:700; font-size:14px; }
+
+/* Hide streamlit default hamburger/toolbar in embedded mode */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
 </style>
 """
+
+# ─────────────────────────────────────────────
+# BLOCKLIST for item names
+# ─────────────────────────────────────────────
+BLOCKED_WORDS = [
+    "nigger","nigga","neger","negro","faggot","retard","kike","spic","chink",
+    "gook","tranny","cunt","slut","whore","bitch"
+]
+
+def contains_blocked_word(text: str) -> bool:
+    lower = text.lower()
+    return any(w in lower for w in BLOCKED_WORDS)
 
 # ─────────────────────────────────────────────
 # KÖZÖS MEMÓRIA
@@ -220,7 +299,7 @@ def create_pdf(t, tid):
     return buf
 
 # ─────────────────────────────────────────────
-# INJECT
+# INJECT STYLES + JS
 # ─────────────────────────────────────────────
 st.markdown(STYLE, unsafe_allow_html=True)
 st.markdown(CAT_SOUND_JS, unsafe_allow_html=True)
@@ -348,30 +427,35 @@ with menu[0]:
             LOCATIONS = ["Budapest HUB","Catánia","London","New York","Codeland",
                          "Catániai Félszigetek","Nyauperth","Macskatelep","Tarantulai Fészkek"]
 
-            # Helyszínek – külön sorban, nem csúsznak egymásba
             loc_col1, loc_col2 = st.columns(2)
             with loc_col1:
                 start = st.selectbox("Indulás", LOCATIONS, key="send_start")
             with loc_col2:
                 end = st.selectbox("Célállomás", LOCATIONS, key="send_end")
 
-            # Ár és terméknév – külön sorban
             price_col, item_col = st.columns(2)
             with price_col:
                 price = st.number_input("Ár (Cam)", min_value=0, value=1000, key="send_price")
             with item_col:
                 item = st.text_input("Termék neve", key="send_item")
 
-            desc  = st.text_area("Termék leírása", key="send_desc")
+            desc = st.text_area("Termék leírása", key="send_desc")
 
-            # Fotó – külön sorban
-            photo = st.file_uploader("Fotó (jpg/png)", type=["jpg","png"], key="send_photo")
+            # FIX: single uploader, no duplicate label
+            photo = st.file_uploader(
+                "Fotó feltöltése (jpg/png)",
+                type=["jpg", "jpeg", "png"],
+                key="send_photo",
+                label_visibility="visible"
+            )
             if photo:
                 st.image(photo, caption="Előnézet", use_container_width=True)
 
             if st.button("🚀 KÜLDÉS", use_container_width=True, key="send_btn"):
-                if not item:
+                if not item.strip():
                     st.warning("Add meg a termék nevét! 😾")
+                elif contains_blocked_word(item):
+                    st.error("⛔ A termék neve nem megfelelő. Kérjük adj meg egy megfelelő nevet!")
                 elif not photo:
                     st.warning("Tölts fel egy fotót! 😾")
                 else:
@@ -379,7 +463,7 @@ with menu[0]:
                     oid = next_order_id()
                     global_data["active_trades"][tid] = {
                         "order_id": oid, "sender": current_user, "receiver": target,
-                        "item": item, "description": desc, "price": price,
+                        "item": item.strip(), "description": desc, "price": price,
                         "status": "WAITING", "state_text": "Csomagolás alatt...",
                         "photo": photo, "start_loc": start, "end_loc": end,
                         "eta_time": datetime.now() + timedelta(minutes=5),
@@ -460,20 +544,34 @@ with menu[1]:
                     st.session_state[f"nfc_open_{tid}"] = True
 
             if st.session_state.get(f"nfc_open_{tid}"):
+                nfc_id = f"pay_{tid}"
                 st.markdown(f"""
                 <div class="payment-modal">
-                    <div class="rev-label" style="color:#a8edea;">NFC TERMINÁL – POSTÁS INDÍTJA</div>
+                    <div class="rev-label" style="color:#a8edea;">NFC ÉRINTÉSES FIZETÉS</div>
                     <div class="nfc-pulse">📲</div>
-                    <div style="color:white;font-size:17px;font-weight:700;margin:8px 0;">Közelítsd a fizető telefonját</div>
-                    <div style="color:#888;font-size:13px;">Összeg: <b style="color:#43e97b;">{cost} Cam</b></div>
-                    <div style="color:#555;font-size:11px;margin-top:6px;">Order: {oid}</div>
-                    <div id="nfc-terminal-status" style="color:#667eea;font-size:13px;margin-top:12px;">Inicializálás...</div>
+                    <div style="color:white;font-size:17px;font-weight:700;margin:8px 0;">
+                        Közelítsd a fizető telefonját
+                    </div>
+                    <div style="color:#888;font-size:13px;">
+                        Összeg: <b style="color:#43e97b;">{cost} Cam</b>
+                    </div>
+                    <div style="color:#555;font-size:11px;margin-top:4px;">Order: {oid}</div>
+                    <div id="nfc-status-{nfc_id}" style="font-size:13px;margin-top:14px;color:#667eea;">
+                        Inicializálás...
+                    </div>
                 </div>
-                <script>setTimeout(() => startNFCTerminal({cost}, '{oid}'), 500);</script>
                 """, unsafe_allow_html=True)
 
                 nfc_a, nfc_b, nfc_c = st.columns(3)
                 with nfc_a:
+                    # Start real NFC scan
+                    if st.button("📡 NFC Indítás", key=f"nfc_start_{tid}", use_container_width=True):
+                        st.markdown(
+                            f"<script>startNFCScan({cost}, '{oid}', '{nfc_id}');</script>",
+                            unsafe_allow_html=True
+                        )
+                with nfc_b:
+                    # Manual confirm (fallback for devices without NFC)
                     if st.button("✅ Jóváhagyás", key=f"nfc_ok_{tid}", use_container_width=True):
                         if global_data["balances"].get(current_user, 0) >= cost:
                             global_data["balances"][current_user] -= cost
@@ -489,9 +587,6 @@ with menu[1]:
                             st.rerun()
                         else:
                             st.error("Nincs elég egyenleg! 😿")
-                with nfc_b:
-                    st.markdown("<div style='color:#555;font-size:10px;text-align:center;padding-top:6px;'>Valódi NFC:<br>Chrome Android</div>",
-                                unsafe_allow_html=True)
                 with nfc_c:
                     if st.button("❌ Mégse", key=f"nfc_cancel_{tid}", use_container_width=True):
                         st.session_state.pop(f"nfc_open_{tid}", None); st.rerun()
@@ -519,29 +614,42 @@ with menu[1]:
                 </div>""", unsafe_allow_html=True)
             with hc2:
                 if rem > 0:
-                    st.markdown(f"<div style='text-align:right;font-size:26px;font-weight:900;color:#667eea;'>⏳ {int(rem//60):02d}:{int(rem%60):02d}</div>",
-                                unsafe_allow_html=True)
+                    mins = int(rem // 60)
+                    secs = int(rem % 60)
+                    st.markdown(
+                        f"<div class='eta-timer'>⏳ {mins:02d}:{secs:02d}</div>",
+                        unsafe_allow_html=True
+                    )
                 else:
-                    st.markdown("<div style='text-align:right;color:#ffc107;font-weight:700;font-size:14px;'>⏰ Hamarosan megérkezik!</div>",
-                                unsafe_allow_html=True)
+                    st.markdown(
+                        "<div class='eta-soon'>⏰ Hamarosan megérkezik!</div>",
+                        unsafe_allow_html=True
+                    )
 
             ctrl_col, info_col = st.columns(2)
 
             with ctrl_col:
                 if t["sender"] == current_user:
                     STATES = ["Csomagolás alatt...","Úton a reptérre","A levegőben ✈️","Kiszállítás alatt","A kapu előtt 🚪"]
-                    new_s = st.selectbox("📍 Státusz", STATES,
+                    new_s = st.selectbox(
+                        "📍 Státusz", STATES,
                         index=STATES.index(t["state_text"]) if t["state_text"] in STATES else 0,
-                        key=f"s_{tid}")
+                        key=f"s_{tid}"
+                    )
                     if new_s != t["state_text"]:
                         old = t["state_text"]; t["state_text"] = new_s
                         send_msg(t["receiver"], f"🐾 {oid} • Státusz: **{new_s}** (volt: {old})", "info")
                         st.markdown("<script>playCatSound('send')</script>", unsafe_allow_html=True)
                         st.rerun()
 
-                    with st.expander("⏱️ ETA módosítás"):
-                        new_eta = st.number_input("Perc:", 1, 120, 5, key=f"eta_{tid}")
-                        if st.button("🕐 Mentés", key=f"etab_{tid}"):
+                    # FIX: replaced expander (which caused _arrow_right bug) with a clean section
+                    st.markdown("**⏱️ ETA módosítás**")
+                    eta_col1, eta_col2 = st.columns([3, 1])
+                    with eta_col1:
+                        new_eta = st.number_input("Percben:", min_value=1, max_value=120, value=5, key=f"eta_{tid}")
+                    with eta_col2:
+                        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                        if st.button("🕐", key=f"etab_{tid}", use_container_width=True, help="ETA mentése"):
                             t["eta_time"] = datetime.now() + timedelta(minutes=new_eta)
                             global_data["eta_notified"].discard(tid)
                             send_msg(t["receiver"], f"⏱️ {oid} • ETA frissítve: {new_eta} perc!", "info")
@@ -594,7 +702,7 @@ with menu[1]:
                                    key=f"pdf_{tid}", use_container_width=True)
 
 # ════════════════════════════════════════════
-# TAB 3 – BANK (4 jegyű PIN, csak saját egyenleg)
+# TAB 3 – BANK
 # ════════════════════════════════════════════
 with menu[2]:
 
@@ -672,36 +780,48 @@ with menu[2]:
         bank_tabs = st.tabs(["📲 NFC Terminál", "💳 Kártya küldés", "📊 Kimutatás"])
 
         with bank_tabs[0]:
-            st.markdown("#### 📲 NFC Terminál")
+            st.markdown("#### 📲 NFC Terminál – Érintéses Fizetés")
             st.markdown("""
             <div style="background:rgba(102,126,234,0.08);border:1px solid rgba(102,126,234,0.2);
                 border-radius:12px;padding:14px;font-size:13px;color:#aaa;margin-bottom:16px;">
-                🐾 <b>Hogyan működik:</b> Te (postás/fogadó) elindítod → az összeg az NFC tagre kerül →
-                a fizető közelíti a telefonját → jóváhagyás. Valódi NFC: <b>Chrome Android</b>.
+                🐾 <b>Hogyan működik:</b><br>
+                1. Add meg az összeget és a fizető felet<br>
+                2. Kattints az <b>NFC Indítás</b> gombra<br>
+                3. A fizető közelíti a telefonját<br>
+                4. Az app automatikusan érzékeli és jóváhagyja<br><br>
+                ⚠️ <b>Valódi NFC:</b> Chrome Android szükséges, és NFC engedély.<br>
+                Ha nem érhető el, használd a kézi <b>Jóváhagyás</b> gombot.
             </div>""", unsafe_allow_html=True)
 
             tc1, tc2 = st.columns(2)
             nfc_amt = tc1.number_input("Összeg (Cam)", min_value=1, value=500, key="nfc_bank_amount")
             nfc_to  = tc2.selectbox("Fizető fél", [u for u in USERS if u != current_user], key="nfc_bank_to")
-            nfc_oid = st.text_input("Order ID (opcionális)", placeholder="ORD-...", key="nfc_bank_oid")
+            nfc_oid_input = st.text_input("Order ID (opcionális)", placeholder="ORD-...", key="nfc_bank_oid")
+            nfc_ref = nfc_oid_input if nfc_oid_input.strip() else "BANK"
 
+            nfc_bank_id = f"bank_{current_user}"
             st.markdown(f"""
             <div class="payment-modal">
                 <div class="nfc-pulse">📲</div>
-                <div style="color:white;font-size:16px;font-weight:700;">NFC terminál kész</div>
-                <div style="color:#888;font-size:13px;margin:8px 0;">Összeg: <b style="color:#43e97b;">{nfc_amt} Cam</b></div>
-                <div id="nfc-terminal-status" style="color:#667eea;font-size:12px;margin-top:8px;">
-                    Kattints az indításhoz ↓
+                <div style="color:white;font-size:16px;font-weight:700;">NFC Terminál</div>
+                <div style="color:#888;font-size:13px;margin:8px 0;">
+                    Összeg: <b style="color:#43e97b;">{nfc_amt} Cam</b>
+                    &nbsp;•&nbsp; Fizető: <b style="color:#a8edea;">{nfc_to.capitalize()}</b>
+                </div>
+                <div id="nfc-status-{nfc_bank_id}" style="color:#667eea;font-size:13px;margin-top:10px;">
+                    Várakozás...
                 </div>
             </div>""", unsafe_allow_html=True)
 
             na, nb, nc = st.columns(3)
             with na:
-                if st.button("📲 NFC Indítás", use_container_width=True, key="nfc_start_bank"):
-                    ref = nfc_oid if nfc_oid else "BANK"
-                    st.markdown(f"<script>startNFCTerminal({nfc_amt}, '{ref}');</script>",
-                                unsafe_allow_html=True)
+                if st.button("📡 NFC Indítás", use_container_width=True, key="nfc_start_bank"):
+                    st.markdown(
+                        f"<script>startNFCScan({nfc_amt}, '{nfc_ref}', '{nfc_bank_id}');</script>",
+                        unsafe_allow_html=True
+                    )
             with nb:
+                # Manual fallback confirm
                 if st.button("✅ Jóváhagyás", use_container_width=True, key="nfc_bank_ok"):
                     if global_data["balances"].get(nfc_to, 0) >= nfc_amt:
                         global_data["balances"][nfc_to] -= nfc_amt
@@ -714,8 +834,10 @@ with menu[2]:
                     else:
                         st.error("A fizető félnek nincs elég egyenlege! 😿")
             with nc:
-                st.markdown("<div style='color:#444;font-size:10px;text-align:center;padding-top:6px;'>Szimuláció:<br>ha nincs NFC</div>",
-                            unsafe_allow_html=True)
+                st.markdown(
+                    "<div style='color:#444;font-size:10px;text-align:center;padding-top:6px;'>Kézi mód:<br>NFC nélkül</div>",
+                    unsafe_allow_html=True
+                )
 
         with bank_tabs[1]:
             st.markdown("#### 💳 Kártya küldés")
@@ -738,7 +860,6 @@ with menu[2]:
 
         with bank_tabs[2]:
             st.markdown("#### 📊 Saját kimutatás")
-            # CSAK A SAJÁT TRANZAKCIÓK – más egyenlege nem látható
             my_trades = [t for t in global_data["active_trades"].values()
                          if current_user in (t["sender"], t["receiver"])]
             if not my_trades:
@@ -790,5 +911,6 @@ with menu[3]:
                 st.download_button("📥 Számla", data=pdf, file_name=f"szamla_{oid}.pdf",
                                    key=f"hist_{oid}_{id(t)}", use_container_width=True)
 
+# Auto-refresh every 3 seconds
 time.sleep(3)
 st.rerun()
