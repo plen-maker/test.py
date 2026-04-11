@@ -8,336 +8,242 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
 # --- 1. OLDAL BEÁLLÍTÁSA ---
-st.set_page_config(page_title="Tréd🔥🔥🔥", layout="wide", page_icon="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTq9xFPrGZcuBi4sGho51wcEmiwO7M_cN35kQ&s")
+st.set_page_config(
+    page_title="Tréd🔥🔥🔥", layout="wide",
+    page_icon="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTq9xFPrGZcuBi4sGho51wcEmiwO7M_cN35kQ&s"
+)
 
-# --- MACSKANYAVOGAS HANGOK + REVOLUT STÍLUS ---
 CAT_SOUND_JS = """
 <script>
 function playCatSound(type) {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    
-    if (type === 'send') {
-        // Nyávogás küldéskor - felmegy
-        oscillator.frequency.setValueAtTime(400, ctx.currentTime);
-        oscillator.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.2);
-        oscillator.frequency.linearRampToValueAtTime(600, ctx.currentTime + 0.4);
-        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-        oscillator.start(ctx.currentTime);
-        oscillator.stop(ctx.currentTime + 0.5);
-    } else if (type === 'receive') {
-        // Nyávogás fogadáskor - lejön
-        oscillator.frequency.setValueAtTime(700, ctx.currentTime);
-        oscillator.frequency.linearRampToValueAtTime(350, ctx.currentTime + 0.3);
-        oscillator.frequency.linearRampToValueAtTime(500, ctx.currentTime + 0.5);
-        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
-        oscillator.start(ctx.currentTime);
-        oscillator.stop(ctx.currentTime + 0.6);
-    } else if (type === 'alert') {
-        // Duplanyávogás alertre
-        oscillator.frequency.setValueAtTime(600, ctx.currentTime);
-        oscillator.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.15);
-        oscillator.frequency.setValueAtTime(600, ctx.currentTime + 0.25);
-        oscillator.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.4);
-        gainNode.gain.setValueAtTime(0.25, ctx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-        oscillator.start(ctx.currentTime);
-        oscillator.stop(ctx.currentTime + 0.5);
-    } else if (type === 'done') {
-        // Boldog nyávogás kézbesítéskor
-        oscillator.frequency.setValueAtTime(500, ctx.currentTime);
-        oscillator.frequency.linearRampToValueAtTime(1000, ctx.currentTime + 0.3);
-        oscillator.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.5);
-        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
-        oscillator.start(ctx.currentTime);
-        oscillator.stop(ctx.currentTime + 0.6);
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        const t = ctx.currentTime;
+        if (type==='send'){
+            osc.frequency.setValueAtTime(400,t);
+            osc.frequency.linearRampToValueAtTime(800,t+0.2);
+            osc.frequency.linearRampToValueAtTime(600,t+0.4);
+            gain.gain.setValueAtTime(0.3,t);
+            gain.gain.exponentialRampToValueAtTime(0.01,t+0.5);
+            osc.start(t); osc.stop(t+0.5);
+        } else if (type==='receive'){
+            osc.frequency.setValueAtTime(700,t);
+            osc.frequency.linearRampToValueAtTime(350,t+0.3);
+            osc.frequency.linearRampToValueAtTime(500,t+0.5);
+            gain.gain.setValueAtTime(0.3,t);
+            gain.gain.exponentialRampToValueAtTime(0.01,t+0.6);
+            osc.start(t); osc.stop(t+0.6);
+        } else if (type==='alert'){
+            osc.frequency.setValueAtTime(600,t);
+            osc.frequency.linearRampToValueAtTime(900,t+0.15);
+            osc.frequency.setValueAtTime(600,t+0.25);
+            osc.frequency.linearRampToValueAtTime(900,t+0.4);
+            gain.gain.setValueAtTime(0.25,t);
+            gain.gain.exponentialRampToValueAtTime(0.01,t+0.5);
+            osc.start(t); osc.stop(t+0.5);
+        } else if (type==='done'){
+            osc.frequency.setValueAtTime(500,t);
+            osc.frequency.linearRampToValueAtTime(1000,t+0.3);
+            osc.frequency.linearRampToValueAtTime(800,t+0.5);
+            gain.gain.setValueAtTime(0.3,t);
+            gain.gain.exponentialRampToValueAtTime(0.01,t+0.6);
+            osc.start(t); osc.stop(t+0.6);
+        }
+    } catch(e){}
+}
+</script>
+"""
+
+NFC_JS = """
+<script>
+async function startNFCTerminal(amount, orderId) {
+    const statusEl = document.getElementById('nfc-terminal-status');
+    if (!('NDEFReader' in window)) {
+        if(statusEl) statusEl.innerHTML = '❌ Web NFC nem támogatott (Chrome Android kell)';
+        return;
+    }
+    try {
+        const ndef = new NDEFReader();
+        if(statusEl) { statusEl.innerHTML = '📲 NFC terminál aktív – közelítsd a fizető telefonját...'; statusEl.style.color='#43e97b'; }
+        await ndef.write({
+            records: [{ recordType: "text", data: JSON.stringify({ amount: amount, orderId: orderId, type: "tred_payment" }) }]
+        });
+        if(statusEl) statusEl.innerHTML = '✅ NFC adat kiírva!';
+    } catch(e) {
+        if(statusEl) statusEl.innerHTML = '❌ ' + e.message;
     }
 }
 </script>
 """
 
-REVOLUT_STYLE = """
+STYLE = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
-* { font-family: 'Inter', sans-serif !important; }
-
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+* { font-family: 'Inter', sans-serif !important; box-sizing: border-box; }
 .rev-card {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-    border-radius: 20px;
-    padding: 24px;
-    color: white;
-    margin-bottom: 16px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px; padding: 24px; color: white; margin-bottom: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);
 }
-
 .rev-balance {
-    font-size: 42px;
-    font-weight: 800;
+    font-size: 44px; font-weight: 900;
     background: linear-gradient(90deg, #fff 0%, #a8edea 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: -1px;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -2px;
 }
-
-.rev-label {
-    font-size: 12px;
-    font-weight: 500;
-    color: rgba(255,255,255,0.6);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-}
-
-.nfc-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: 50px;
-    padding: 12px 28px;
-    color: white;
-    font-weight: 700;
-    font-size: 16px;
-    cursor: pointer;
-    width: 100%;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-}
-
-.nfc-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
-}
-
-.card-btn {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    border: none;
-    border-radius: 50px;
-    padding: 12px 28px;
-    color: white;
-    font-weight: 700;
-    font-size: 16px;
-    cursor: pointer;
-    width: 100%;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
-}
-
-.payment-modal {
-    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
-    border-radius: 24px;
-    padding: 32px;
-    border: 1px solid rgba(255,255,255,0.15);
-    text-align: center;
-}
-
-.nfc-animation {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
+.rev-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 2px; }
+.nfc-pulse {
+    width: 90px; height: 90px; border-radius: 50%;
     background: linear-gradient(135deg, #667eea, #764ba2);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 36px;
-    margin: 16px auto;
-    animation: nfc-pulse 1.5s infinite;
-    box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; margin: 0 auto 16px;
+    animation: pulse 1.4s ease-in-out infinite;
 }
-
-@keyframes nfc-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7); }
-    70% { box-shadow: 0 0 0 20px rgba(102, 126, 234, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+@keyframes pulse {
+    0%   { box-shadow: 0 0 0 0   rgba(102,126,234,0.7); }
+    70%  { box-shadow: 0 0 0 22px rgba(102,126,234,0); }
+    100% { box-shadow: 0 0 0 0   rgba(102,126,234,0); }
 }
-
-.msg-bubble {
-    background: rgba(102, 126, 234, 0.15);
-    border-left: 3px solid #667eea;
-    border-radius: 0 12px 12px 0;
-    padding: 10px 16px;
-    margin: 8px 0;
-    font-size: 13px;
-    color: #e0e0e0;
+.payment-modal {
+    background: linear-gradient(180deg,#1a1a2e,#0f0f1a);
+    border-radius: 24px; padding: 28px; border: 1px solid rgba(255,255,255,0.12);
+    text-align: center; margin: 8px 0;
 }
-
-.msg-bubble.cat {
-    background: rgba(245, 87, 108, 0.1);
-    border-left-color: #f5576c;
-}
-
+.msg-bubble { background: rgba(102,126,234,0.12); border-left: 3px solid #667eea; border-radius: 0 10px 10px 0; padding: 9px 14px; margin: 6px 0; font-size: 12px; color: #ddd; }
+.msg-bubble.alert { background: rgba(245,87,108,0.1); border-left-color: #f5576c; }
 .paper-sign {
-    background: linear-gradient(145deg, #fefefe 0%, #f0f0e8 100%);
-    border: 2px solid #d4c5a0;
-    border-radius: 4px;
-    padding: 32px;
-    color: #2c2c2c;
-    box-shadow: 4px 4px 12px rgba(0,0,0,0.15), inset 0 0 30px rgba(200,190,160,0.2);
-    font-family: 'Georgia', serif !important;
-    position: relative;
+    background: linear-gradient(145deg,#fefefe,#f0efe6);
+    border: 2px solid #d4c5a0; border-radius: 4px; padding: 28px;
+    color: #2c2c2c; box-shadow: 3px 3px 10px rgba(0,0,0,0.15); position: relative; overflow: hidden;
 }
-
 .paper-sign::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    content: ''; position: absolute; inset: 0;
     background: repeating-linear-gradient(transparent, transparent 27px, #e8e0d0 27px, #e8e0d0 28px);
-    border-radius: 4px;
-    opacity: 0.4;
-    pointer-events: none;
+    opacity: 0.35; pointer-events: none;
 }
-
-.sign-line {
-    border-bottom: 2px solid #2c2c2c;
-    margin: 24px 0 8px 0;
-    height: 40px;
-    display: flex;
-    align-items: flex-end;
-    padding-bottom: 4px;
-    font-style: italic;
-    font-size: 22px;
-}
-
-.tx-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.tx-amount-neg { color: #f5576c; font-weight: 600; }
-.tx-amount-pos { color: #43e97b; font-weight: 600; }
-
-.pill {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.pill-waiting { background: rgba(255,193,7,0.2); color: #ffc107; }
-.pill-accepted { background: rgba(102,126,234,0.2); color: #667eea; }
-.pill-done { background: rgba(67,233,123,0.2); color: #43e97b; }
+.pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+.pill-waiting { background:rgba(255,193,7,.2); color:#ffc107; }
+.pill-accepted { background:rgba(102,126,234,.2); color:#667eea; }
+.pill-done { background:rgba(67,233,123,.2); color:#43e97b; }
+.tx-row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+.pos { color:#43e97b; font-weight:700; }
+.neg { color:#f5576c; font-weight:700; }
 </style>
 """
 
-# --- 2. KÖZÖS MEMÓRIA ---
+# ─────────────────────────────────────────────
+# KÖZÖS MEMÓRIA
+# ─────────────────────────────────────────────
 @st.cache_resource
 def get_global_data():
     return {
         "online_users": {},
-        "trade_history": [],
         "active_trades": {},
-        "balances": {"admin": 50000, "peti": 50000, "adel": 50000, "ddnemet": 50000, "kormuranusz": 50000},
-        "base_gallery": [],
-        "messages": {},   # user -> list of {text, type, ts}
-        "eta_notified": set(),  # tid-k amikre már küldtünk ETA lejárt üzenetet
-        "order_counter": [1000]
+        "balances": {
+            "admin": 50000, "peti": 50000, "adel": 50000,
+            "ddnemet": 50000, "kormuranusz": 50000
+        },
+        "messages": {},
+        "eta_notified": set(),
+        "order_counter": [1000],
+        "bank_pins": {},
+        "bank_sessions": {}
     }
 
 global_data = get_global_data()
-USERS = {"admin": "1234", "peti": "pisti77", "adel": "trade99", "kormuranusz": "kormicica", "ddnemet": "koficcica"}
+USERS = {
+    "admin": "1234", "peti": "pisti77", "adel": "trade99",
+    "kormuranusz": "kormicica", "ddnemet": "koficcica"
+}
 
 def next_order_id():
     global_data["order_counter"][0] += 1
     return f"ORD-{global_data['order_counter'][0]}"
 
-def send_message(user, text, mtype="info"):
-    """Üzenet küldése egy felhasználónak"""
-    if user not in global_data["messages"]:
-        global_data["messages"][user] = []
-    global_data["messages"][user].append({
-        "text": text,
-        "type": mtype,
-        "ts": datetime.now().strftime("%H:%M:%S"),
-        "read": False
+def send_msg(user, text, mtype="info"):
+    global_data["messages"].setdefault(user, []).append({
+        "text": text, "type": mtype,
+        "ts": datetime.now().strftime("%H:%M:%S"), "read": False
     })
 
-def get_unread(user):
-    msgs = global_data["messages"].get(user, [])
-    return [m for m in msgs if not m["read"]]
+def unread(user):
+    return [m for m in global_data["messages"].get(user, []) if not m["read"]]
 
-def mark_all_read(user):
+def mark_read(user):
     for m in global_data["messages"].get(user, []):
         m["read"] = True
 
-# --- 3. PROFI SZÁMLA GENERÁLÓ ---
+# ─────────────────────────────────────────────
+# PDF
+# ─────────────────────────────────────────────
 def create_pdf(t, tid):
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-    # Header sáv
+    W, H = A4
     c.setFillColor(colors.HexColor("#1a1a2e"))
-    c.rect(0, height - 80, width, 80, fill=1, stroke=0)
-    c.setFont("Helvetica-Bold", 22)
-    c.setFillColor(colors.white)
-    c.drawString(50, height - 50, "TRÉD PLATFORM  •  HIVATALOS SZÁMLA")
-    c.setFont("Helvetica", 10)
-    c.setFillColor(colors.HexColor("#a8edea"))
-    c.drawString(50, height - 68, f"Order szám: {t.get('order_id', tid)}   |   Tranzakció: {tid}")
-    # Törzsrész
+    c.rect(0, H-80, W, 80, fill=1, stroke=0)
+    c.setFont("Helvetica-Bold", 20); c.setFillColor(colors.white)
+    c.drawString(50, H-48, "TRED PLATFORM  •  HIVATALOS SZAMLA")
+    c.setFont("Helvetica", 10); c.setFillColor(colors.HexColor("#a8edea"))
+    c.drawString(50, H-66, f"Order: {t.get('order_id', tid)}   |   TID: {tid}")
     c.setFillColor(colors.black)
-    c.setFont("Helvetica", 10)
-    c.drawString(50, height - 100, f"Elfogadás ideje: {t.get('accepted_at', 'N/A')}")
-    c.line(50, height - 110, width - 50, height - 110)
-    y = height - 135
-    c.setFont("Helvetica-Bold", 12); c.drawString(50, y, "SZÁLLÍTÁSI ADATOK")
-    c.setFont("Helvetica", 11); y -= 20
-    c.drawString(60, y, f"Feladó: {t['sender'].capitalize()}")
-    y -= 15; c.drawString(60, y, f"Címzett: {t['receiver'].capitalize()}")
-    y -= 15; c.drawString(60, y, f"Útvonal: {t['start_loc']}  ——>>>  {t['end_loc']}")
-    y -= 40; c.setFont("Helvetica-Bold", 12); c.drawString(50, y, "TERMÉK INFORMÁCIÓ")
-    c.setFont("Helvetica", 11); y -= 20
-    c.drawString(60, y, f"Megnevezés: {t['item']}")
-    y -= 15; c.setFont("Helvetica-Oblique", 10)
-    c.drawString(60, y, f"Leírás: {t.get('description', 'Nincs leírás')}")
-    y -= 50; c.line(50, y + 10, width - 50, y + 10)
-    c.setFont("Helvetica-Bold", 12); c.drawString(50, y, "KÖLTSÉGVETÉS")
-    c.setFont("Helvetica", 11); y -= 20
-    c.drawString(60, y, f"Termék eredeti ára: {t['price']} Cam")
-    y -= 15; c.drawString(60, y, f"Szállítási díj: 990 Cam")
-    y -= 30; c.setFont("Helvetica-Bold", 14); c.setFillColor(colors.HexColor("#f5576c"))
-    c.drawString(50, y, f"TELJES FIZETETT ÖSSZEG: {t['price'] + 990} Cam")
-    # Fizetési mód
-    y -= 30; c.setFont("Helvetica", 11); c.setFillColor(colors.black)
-    pay_mode = t.get('payment_method', 'Ismeretlen')
-    c.drawString(50, y, f"Fizetési mód: {pay_mode}")
-    # Footer
-    c.setFillColor(colors.HexColor("#f0f0f0"))
-    c.rect(0, 0, width, 40, fill=1, stroke=0)
-    c.setFillColor(colors.HexColor("#666"))
-    c.setFont("Helvetica", 9)
-    c.drawString(50, 14, "Tréd Platform  •  Automatikusan generált számla  •  Minden jog fenntartva")
+    c.setFont("Helvetica", 10); c.drawString(50, H-100, f"Kiallitva: {t.get('accepted_at','N/A')}")
+    c.line(50, H-110, W-50, H-110)
+    y = H-135
+    for label, val in [
+        ("Felado", t['sender'].capitalize()),
+        ("Cimzett", t['receiver'].capitalize()),
+        ("Utvonal", f"{t['start_loc']}  ->  {t['end_loc']}"),
+        ("Termek", t['item']),
+        ("Leiras", t.get('description','–')),
+    ]:
+        c.setFont("Helvetica-Bold", 10); c.drawString(50, y, label+":")
+        c.setFont("Helvetica", 10); c.drawString(160, y, str(val))
+        y -= 18
+    y -= 12; c.line(50, y+6, W-50, y+6)
+    c.setFont("Helvetica-Bold", 12); c.drawString(50, y-14, "Termekár:")
+    c.setFont("Helvetica", 12); c.drawString(160, y-14, f"{t['price']} Cam")
+    c.setFont("Helvetica-Bold", 12); c.drawString(50, y-32, "Szallitas:")
+    c.setFont("Helvetica", 12); c.drawString(160, y-32, "990 Cam")
+    c.setFont("Helvetica-Bold", 14); c.setFillColor(colors.HexColor("#f5576c"))
+    c.drawString(50, y-56, f"VEGOSSZEG: {t['price']+990} Cam")
+    c.setFont("Helvetica", 11); c.setFillColor(colors.black)
+    c.drawString(50, y-76, f"Fizetesi mod: {t.get('payment_method','–')}")
+    if t.get('signature'):
+        c.drawString(50, y-96, f"Alairasas: {t['signature']}")
+    c.setFillColor(colors.HexColor("#f0f0f0")); c.rect(0, 0, W, 36, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor("#777")); c.setFont("Helvetica", 9)
+    c.drawString(50, 12, "Tred Platform  •  Automatikusan generalt szamla  •  Minden jog fenntartva")
     c.save(); buf.seek(0)
     return buf
 
-# --- 4. LOGIN KEZELÉS ---
-st.markdown(REVOLUT_STYLE, unsafe_allow_html=True)
+# ─────────────────────────────────────────────
+# INJECT
+# ─────────────────────────────────────────────
+st.markdown(STYLE, unsafe_allow_html=True)
 st.markdown(CAT_SOUND_JS, unsafe_allow_html=True)
+st.markdown(NFC_JS, unsafe_allow_html=True)
 
+# ─────────────────────────────────────────────
+# LOGIN
+# ─────────────────────────────────────────────
 placeholder = st.empty()
 
-if 'username' not in st.session_state:
+if "username" not in st.session_state:
     with placeholder.container():
         st.markdown("""
-        <div style='max-width:400px;margin:80px auto;text-align:center;'>
-            <div style='font-size:60px;margin-bottom:16px;'>😼</div>
-            <h1 style='font-size:32px;font-weight:800;background:linear-gradient(90deg,#667eea,#f5576c);
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;'>TRÉD</h1>
-            <p style='color:#888;margin-bottom:32px;'>Macskás kereskedési platform</p>
+        <div style='max-width:380px;margin:70px auto;text-align:center;'>
+            <div style='font-size:64px;'>😼</div>
+            <h1 style='font-size:36px;font-weight:900;background:linear-gradient(90deg,#667eea,#f5576c);
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:8px 0 4px;'>TRÉD</h1>
+            <p style='color:#666;margin-bottom:32px;font-size:14px;'>Macskás kereskedési platform</p>
         </div>
         """, unsafe_allow_html=True)
-        u = st.text_input("Felhasználónév", key="login_u").lower().strip()
-        p = st.text_input("Jelszó", type="password", key="login_p")
-        if st.button("🐾 Belépés", key="login_btn", use_container_width=True):
+        u = st.text_input("Felhasználónév", key="lu").lower().strip()
+        p = st.text_input("Jelszó", type="password", key="lp")
+        if st.button("🐾 Belépés", use_container_width=True):
             if u in USERS and USERS[u] == p:
                 st.session_state.username = u
                 placeholder.empty()
@@ -346,86 +252,88 @@ if 'username' not in st.session_state:
                 st.error("Hibás adatok! 🙀")
     st.stop()
 
-# --- 5. HA BE VAN LÉPVE ---
+# ─────────────────────────────────────────────
+# BEJELENTKEZVE
+# ─────────────────────────────────────────────
 current_user = st.session_state.username
 global_data["online_users"][current_user] = time.time()
+online_now = [u for u, ts in global_data["online_users"].items() if time.time() - ts < 10]
 
-# ETA LEJÁRAT FIGYELÉS - üzenetek küldése
-for tid, t in global_data["active_trades"].items():
-    if t['status'] == "ACCEPTED":
+# ETA lejárat figyelő
+for tid, t in list(global_data["active_trades"].items()):
+    if t["status"] == "ACCEPTED":
         rem = (t["eta_time"] - datetime.now()).total_seconds()
         if rem <= 0 and tid not in global_data["eta_notified"]:
             global_data["eta_notified"].add(tid)
-            order_id = t.get('order_id', tid)
-            send_message(t['sender'], f"🕐 {order_id} – Az ETA lejárt! A csomag hamarosan megérkezik a célállomásra. 🐾", "alert")
-            send_message(t['receiver'], f"🕐 {order_id} – Az ETA lejárt! A csomagod hamarosan megérkezik, légy türelemmel! 🐾", "alert")
+            oid = t.get("order_id", tid)
+            send_msg(t["sender"], f"🕐 {oid} – ETA lejárt! A csomag hamarosan megérkezik. 🐾", "alert")
+            send_msg(t["receiver"], f"🕐 {oid} – ETA lejárt! A csomagod hamarosan ott lesz, légy türelemmel! 🐾", "alert")
 
-# SIDEBAR - REVOLUT STÍLUS
+# ─────────────────────────────────────────────
+# SIDEBAR
+# ─────────────────────────────────────────────
 with st.sidebar:
-    online_now = [u for u, last in global_data["online_users"].items() if time.time() - last < 10]
-    bal = global_data['balances'].get(current_user, 0)
-    unread = get_unread(current_user)
+    bal = global_data["balances"].get(current_user, 0)
+    unreads = unread(current_user)
 
     st.markdown(f"""
     <div class="rev-card">
-        <div class="rev-label">Főszámla egyenleg</div>
+        <div class="rev-label">Főszámla</div>
         <div class="rev-balance">{bal:,} Cam</div>
-        <div style="margin-top:12px;font-size:13px;color:rgba(255,255,255,0.6);">
+        <div style="margin-top:10px;font-size:13px;color:rgba(255,255,255,0.55);">
             👤 {current_user.capitalize()}
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Online userek
-    st.markdown(f"<div style='font-size:13px;color:#888;margin-bottom:8px;'>🟢 Online: {', '.join(online_now)}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:12px;color:#555;margin-bottom:12px;'>🟢 Online: {', '.join(online_now)}</div>",
+                unsafe_allow_html=True)
 
-    # Üzenetek
-    if unread:
-        st.markdown(f"### 🔔 Értesítések ({len(unread)})")
-        for m in unread[-5:]:
-            icon = "🐱" if m["type"] == "info" else "🙀" if m["type"] == "alert" else "😺"
-            st.markdown(f"""
-            <div class="msg-bubble {'cat' if m['type'] == 'alert' else ''}">
-                {icon} <b>{m['ts']}</b><br>{m['text']}
-            </div>
-            """, unsafe_allow_html=True)
+    if unreads:
+        st.markdown(f"#### 🔔 Értesítések ({len(unreads)})")
+        for m in unreads[-6:]:
+            icon = "🙀" if m["type"] == "alert" else "😺"
+            css = "alert" if m["type"] == "alert" else ""
+            st.markdown(f'<div class="msg-bubble {css}">{icon} <b>{m["ts"]}</b><br>{m["text"]}</div>',
+                        unsafe_allow_html=True)
         if st.button("✓ Olvasottnak jelöl", use_container_width=True):
-            mark_all_read(current_user)
-            st.rerun()
+            mark_read(current_user); st.rerun()
     else:
-        st.markdown("<div style='color:#555;font-size:13px;'>Nincs új értesítés 😸</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#444;font-size:12px;'>Nincs új értesítés 😸</div>", unsafe_allow_html=True)
 
     st.divider()
 
-    # Tranzakció előzmények a sidebarban
     my_done = [t for t in global_data["active_trades"].values()
-               if t['status'] == "DONE" and (t['sender'] == current_user or t['receiver'] == current_user)]
+               if t["status"] == "DONE" and current_user in (t["sender"], t["receiver"])]
     if my_done:
-        st.markdown("### 📊 Tranzakciók")
+        st.markdown("#### 📊 Saját tranzakciók")
         for t in my_done[-5:]:
-            is_sender = t['sender'] == current_user
-            amount = -(t['price'] + 990) if not is_sender else (t['price'] + 495)
-            color_class = "tx-amount-pos" if amount > 0 else "tx-amount-neg"
-            sign = "+" if amount > 0 else ""
+            amt = -(t["price"]+990) if t["receiver"] == current_user else (t["price"]+495)
+            cls = "pos" if amt > 0 else "neg"
+            sign = "+" if amt > 0 else ""
             st.markdown(f"""
-            <div class="tx-item">
+            <div class="tx-row">
                 <div>
-                    <div style='font-size:13px;font-weight:500;'>{t['item']}</div>
-                    <div style='font-size:11px;color:#555;'>{t.get('order_id','?')}</div>
+                    <div style='font-size:12px;font-weight:600;'>{t['item']}</div>
+                    <div style='font-size:10px;color:#555;'>{t.get('order_id','?')}</div>
                 </div>
-                <div class="{color_class}">{sign}{amount} Cam</div>
-            </div>
-            """, unsafe_allow_html=True)
+                <div class="{cls}">{sign}{amt} Cam</div>
+            </div>""", unsafe_allow_html=True)
 
     st.divider()
     if st.button("🚪 Kijelentkezés", use_container_width=True):
         del st.session_state.username
+        global_data["bank_sessions"].pop(current_user, None)
         st.rerun()
 
-# --- FŐ APP ---
+# ─────────────────────────────────────────────
+# FŐ TABEK
+# ─────────────────────────────────────────────
 menu = st.tabs(["🚀 KÜLDÉS", "📋 BEJÖVŐ & AKTÍV", "🏦 BANK", "📜 HISTORY"])
 
-# ==================== TAB 1: KÜLDÉS ====================
+# ════════════════════════════════════════════
+# TAB 1 – KÜLDÉS
+# ════════════════════════════════════════════
 with menu[0]:
     targets = [u for u in online_now if u != current_user]
     if not targets:
@@ -433,188 +341,201 @@ with menu[0]:
     else:
         st.markdown("### 📦 Új szállítási ajánlat")
         col_form, col_prev = st.columns([3, 2])
-        with col_form:
-            target = st.selectbox("Címzett", targets)
-            c1, c2 = st.columns(2)
-            start = c1.selectbox("Indulás", ["Budapest HUB", "Catánia", "London", "New York", "Codeland",
-                                              "Catániai Félszigetek", "Nyauperth", "Macskatelep", "Tarantulai Fészkek"])
-            end = c1.selectbox("Célállomás", ["Budapest HUB", "Catánia", "London", "New York", "Codeland",
-                                               "Catániai Félszigetek", "Nyauperth", "Macskatelep", "Tarantulai Fészkek"])
-            price = c2.number_input("Ár (Cam)", min_value=0, value=1000)
-            item = c2.text_input("Termék neve")
-            desc = st.text_area("Termék leírása")
-            photo = st.file_uploader("Fotó", type=['jpg', 'png'])
 
-            if st.button("🚀 KÜLDÉS", use_container_width=True) and item and photo:
-                tid = f"TID-{int(time.time())}"
-                oid = next_order_id()
-                global_data["active_trades"][tid] = {
-                    "order_id": oid,
-                    "sender": current_user, "receiver": target, "item": item, "description": desc,
-                    "price": price, "status": "WAITING", "state_text": "Csomagolás alatt...",
-                    "photo": photo, "start_loc": start, "end_loc": end,
-                    "eta_time": datetime.now() + timedelta(minutes=5),
-                    "payment_method": None,
-                    "confirm_requested": False,
-                    "confirmed": False,
-                    "signature": None
-                }
-                send_message(target,
-                    f"😺 {current_user.capitalize()} küldött neked egy ajánlatot! • {oid} • Termék: {item} • Ár: {price+990} Cam",
-                    "info")
-                st.markdown("<script>playCatSound('send')</script>", unsafe_allow_html=True)
-                st.success(f"🐾 Elküldve! Order: {oid}")
-                st.rerun()
+        with col_form:
+            target = st.selectbox("Címzett", targets, key="send_target")
+
+            LOCATIONS = ["Budapest HUB","Catánia","London","New York","Codeland",
+                         "Catániai Félszigetek","Nyauperth","Macskatelep","Tarantulai Fészkek"]
+
+            # Helyszínek – külön sorban, nem csúsznak egymásba
+            loc_col1, loc_col2 = st.columns(2)
+            with loc_col1:
+                start = st.selectbox("Indulás", LOCATIONS, key="send_start")
+            with loc_col2:
+                end = st.selectbox("Célállomás", LOCATIONS, key="send_end")
+
+            # Ár és terméknév – külön sorban
+            price_col, item_col = st.columns(2)
+            with price_col:
+                price = st.number_input("Ár (Cam)", min_value=0, value=1000, key="send_price")
+            with item_col:
+                item = st.text_input("Termék neve", key="send_item")
+
+            desc  = st.text_area("Termék leírása", key="send_desc")
+
+            # Fotó – külön sorban
+            photo = st.file_uploader("Fotó (jpg/png)", type=["jpg","png"], key="send_photo")
+            if photo:
+                st.image(photo, caption="Előnézet", use_container_width=True)
+
+            if st.button("🚀 KÜLDÉS", use_container_width=True, key="send_btn"):
+                if not item:
+                    st.warning("Add meg a termék nevét! 😾")
+                elif not photo:
+                    st.warning("Tölts fel egy fotót! 😾")
+                else:
+                    tid = f"TID-{int(time.time())}"
+                    oid = next_order_id()
+                    global_data["active_trades"][tid] = {
+                        "order_id": oid, "sender": current_user, "receiver": target,
+                        "item": item, "description": desc, "price": price,
+                        "status": "WAITING", "state_text": "Csomagolás alatt...",
+                        "photo": photo, "start_loc": start, "end_loc": end,
+                        "eta_time": datetime.now() + timedelta(minutes=5),
+                        "payment_method": None, "confirm_requested": False,
+                        "confirmed": False, "signature": None
+                    }
+                    send_msg(target,
+                        f"😺 {current_user.capitalize()} küldött neked egy ajánlatot! • {oid} • {item} • {price+990} Cam",
+                        "info")
+                    st.markdown("<script>playCatSound('send')</script>", unsafe_allow_html=True)
+                    st.success(f"🐾 Elküldve! Order: {oid}")
+                    st.rerun()
 
         with col_prev:
+            p = st.session_state.get("send_price", 1000)
             st.markdown(f"""
             <div class="rev-card">
                 <div class="rev-label">Összesítő</div>
-                <div style="margin-top:12px;">
-                    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.1);">
-                        <span style="color:#aaa">Termék ár</span>
-                        <span style="font-weight:600">{price if 'price' in dir() else '...'} Cam</span>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.1);">
-                        <span style="color:#aaa">Szállítás</span>
-                        <span style="font-weight:600">990 Cam</span>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;padding:12px 0;margin-top:4px;">
-                        <span style="color:white;font-weight:700">ÖSSZESEN</span>
-                        <span style="color:#43e97b;font-weight:800;font-size:18px;">{(price if 'price' in dir() else 0)+990} Cam</span>
-                    </div>
+                <div class="tx-row"><span style="color:#aaa">Termék</span><span style="font-weight:600">{p} Cam</span></div>
+                <div class="tx-row"><span style="color:#aaa">Szállítás</span><span style="font-weight:600">990 Cam</span></div>
+                <div style="display:flex;justify-content:space-between;padding:14px 0 0;">
+                    <span style="color:white;font-weight:800;font-size:16px;">ÖSSZESEN</span>
+                    <span class="pos" style="font-size:20px;">{p+990} Cam</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-# ==================== TAB 2: BEJÖVŐ & AKTÍV ====================
+# ════════════════════════════════════════════
+# TAB 2 – BEJÖVŐ & AKTÍV
+# ════════════════════════════════════════════
 with menu[1]:
-    # --- BEJÖVŐ AJÁNLATOK (WAITING) ---
+
     reqs = {tid: t for tid, t in global_data["active_trades"].items()
-            if t['receiver'] == current_user and t['status'] == "WAITING"}
+            if t["receiver"] == current_user and t["status"] == "WAITING"}
 
     if reqs:
         st.markdown("### 📩 Bejövő ajánlatok")
-        for tid, t in reqs.items():
-            with st.container(border=True):
-                ca, cb = st.columns([3, 1])
-                with ca:
-                    st.markdown(f"""
-                    <div>
-                        <span style='font-size:18px;font-weight:700;'>📦 {t['item']}</span>
-                        <span class='pill pill-waiting' style='margin-left:8px;'>VÁRAKOZIK</span><br>
-                        <span style='color:#888;font-size:13px;'>Feladó: {t['sender'].capitalize()} • {t['start_loc']} → {t['end_loc']}</span><br>
-                        <span style='color:#888;font-size:13px;'>Order: {t.get('order_id','?')}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with cb:
-                    cost = t["price"] + 990
-                    st.markdown(f"**{cost} Cam**")
 
-                # FIZETÉSI MÓD VÁLASZTÁS
-                st.markdown("#### 💳 Fizetési mód")
-                pay_col1, pay_col2 = st.columns(2)
-                with pay_col1:
-                    if st.button(f"💳 Kártyával ({cost} Cam)", key=f"card_{tid}", use_container_width=True):
-                        if global_data["balances"][current_user] >= cost:
+    for tid, t in reqs.items():
+        with st.container(border=True):
+            oid = t.get("order_id", tid)
+            cost = t["price"] + 990
+            ia, ib = st.columns([3,1])
+            with ia:
+                st.markdown(f"""
+                <div>
+                  <span style='font-size:17px;font-weight:700;'>📦 {t['item']}</span>
+                  <span class='pill pill-waiting' style='margin-left:8px;'>VÁRAKOZIK</span><br>
+                  <span style='color:#888;font-size:12px;'>Feladó: {t['sender'].capitalize()} •
+                  {t['start_loc']} → {t['end_loc']}</span><br>
+                  <span style='color:#888;font-size:12px;'>Order: {oid}</span>
+                </div>""", unsafe_allow_html=True)
+            with ib:
+                st.markdown(f"<div style='text-align:right;font-size:18px;font-weight:800;color:#f5576c;'>{cost} Cam</div>",
+                            unsafe_allow_html=True)
+
+            st.markdown("#### 💳 Fizetési mód")
+            pc1, pc2 = st.columns(2)
+
+            with pc1:
+                if st.button(f"💳 Kártyával", key=f"card_{tid}", use_container_width=True):
+                    if global_data["balances"].get(current_user, 0) >= cost:
+                        global_data["balances"][current_user] -= cost
+                        global_data["balances"][t["sender"]] = global_data["balances"].get(t["sender"], 0) + t["price"] + 495
+                        t["status"] = "ACCEPTED"
+                        t["payment_method"] = "💳 Kártya"
+                        t["accepted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        send_msg(t["sender"],
+                            f"😸 {current_user.capitalize()} elfogadta! • {oid} • Kártyával • {cost} Cam", "info")
+                        send_msg(current_user, f"✅ {oid} • Kártyás fizetés sikeres! {cost} Cam levonva.", "info")
+                        st.markdown("<script>playCatSound('receive')</script>", unsafe_allow_html=True)
+                        st.rerun()
+                    else:
+                        st.error("Nincs elég egyenleg! 😿")
+
+            with pc2:
+                if st.button(f"📲 NFC fizetés", key=f"nfc_{tid}", use_container_width=True):
+                    st.session_state[f"nfc_open_{tid}"] = True
+
+            if st.session_state.get(f"nfc_open_{tid}"):
+                st.markdown(f"""
+                <div class="payment-modal">
+                    <div class="rev-label" style="color:#a8edea;">NFC TERMINÁL – POSTÁS INDÍTJA</div>
+                    <div class="nfc-pulse">📲</div>
+                    <div style="color:white;font-size:17px;font-weight:700;margin:8px 0;">Közelítsd a fizető telefonját</div>
+                    <div style="color:#888;font-size:13px;">Összeg: <b style="color:#43e97b;">{cost} Cam</b></div>
+                    <div style="color:#555;font-size:11px;margin-top:6px;">Order: {oid}</div>
+                    <div id="nfc-terminal-status" style="color:#667eea;font-size:13px;margin-top:12px;">Inicializálás...</div>
+                </div>
+                <script>setTimeout(() => startNFCTerminal({cost}, '{oid}'), 500);</script>
+                """, unsafe_allow_html=True)
+
+                nfc_a, nfc_b, nfc_c = st.columns(3)
+                with nfc_a:
+                    if st.button("✅ Jóváhagyás", key=f"nfc_ok_{tid}", use_container_width=True):
+                        if global_data["balances"].get(current_user, 0) >= cost:
                             global_data["balances"][current_user] -= cost
-                            global_data["balances"][t["sender"]] += (t["price"] + 495)
-                            t["status"] = "ACCEPTED"
-                            t["payment_method"] = "💳 Kártya"
-                            t["accepted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            send_message(t['sender'],
-                                f"😸 {current_user.capitalize()} elfogadta az ajánlatodat! • {t.get('order_id','?')} • Fizetés: Kártyával • {cost} Cam levonva",
-                                "info")
-                            send_message(current_user,
-                                f"✅ Sikeresen fizettél! • {t.get('order_id','?')} • {cost} Cam levonva kártyáról 💳",
-                                "info")
-                            st.markdown("<script>playCatSound('receive')</script>", unsafe_allow_html=True)
-                            st.rerun()
-                        else:
-                            st.error("Nincs elég egyenleg! 😿")
-
-                with pay_col2:
-                    if st.button(f"📲 NFC ({cost} Cam)", key=f"nfc_{tid}", use_container_width=True):
-                        st.session_state[f"nfc_pending_{tid}"] = True
-
-                # NFC FIZETÉSI ANIMÁCIÓ
-                if st.session_state.get(f"nfc_pending_{tid}"):
-                    st.markdown(f"""
-                    <div class="payment-modal">
-                        <div class="rev-label" style="color:#a8edea;">NFC FIZETÉS</div>
-                        <div class="nfc-animation">📲</div>
-                        <div style="color:white;font-size:18px;font-weight:700;margin:12px 0;">Tartsd a telefonod a terminálhoz</div>
-                        <div style="color:#888;font-size:14px;">Összeg: <b style="color:#43e97b;">{cost} Cam</b></div>
-                        <div style="color:#555;font-size:12px;margin-top:8px;">Order: {t.get('order_id','?')}</div>
-                    </div>
-                    <script>playCatSound('alert')</script>
-                    """, unsafe_allow_html=True)
-                    nfc_cols = st.columns(2)
-                    if nfc_cols[0].button("✅ NFC Jóváhagyás", key=f"nfc_ok_{tid}", use_container_width=True):
-                        if global_data["balances"][current_user] >= cost:
-                            global_data["balances"][current_user] -= cost
-                            global_data["balances"][t["sender"]] += (t["price"] + 495)
+                            global_data["balances"][t["sender"]] = global_data["balances"].get(t["sender"], 0) + t["price"] + 495
                             t["status"] = "ACCEPTED"
                             t["payment_method"] = "📲 NFC"
                             t["accepted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            del st.session_state[f"nfc_pending_{tid}"]
-                            send_message(t['sender'],
-                                f"😸 {current_user.capitalize()} elfogadta az ajánlatodat! • {t.get('order_id','?')} • Fizetés: NFC • {cost} Cam levonva",
-                                "info")
-                            send_message(current_user,
-                                f"✅ NFC fizetés sikeres! • {t.get('order_id','?')} • {cost} Cam 📲",
-                                "info")
+                            st.session_state.pop(f"nfc_open_{tid}", None)
+                            send_msg(t["sender"],
+                                f"😸 {current_user.capitalize()} NFC-vel fizetett! • {oid} • {cost} Cam", "info")
+                            send_msg(current_user, f"✅ {oid} • NFC fizetés sikeres! 📲", "info")
                             st.markdown("<script>playCatSound('done')</script>", unsafe_allow_html=True)
                             st.rerun()
                         else:
                             st.error("Nincs elég egyenleg! 😿")
-                    if nfc_cols[1].button("❌ Mégse", key=f"nfc_cancel_{tid}", use_container_width=True):
-                        del st.session_state[f"nfc_pending_{tid}"]
-                        st.rerun()
+                with nfc_b:
+                    st.markdown("<div style='color:#555;font-size:10px;text-align:center;padding-top:6px;'>Valódi NFC:<br>Chrome Android</div>",
+                                unsafe_allow_html=True)
+                with nfc_c:
+                    if st.button("❌ Mégse", key=f"nfc_cancel_{tid}", use_container_width=True):
+                        st.session_state.pop(f"nfc_open_{tid}", None); st.rerun()
 
     st.divider()
 
-    # --- AKTÍV SZÁLLÍTÁSOK (ACCEPTED) ---
-    active = {tid: t for tid, t in global_data["active_trades"].items() if t['status'] == "ACCEPTED"}
+    active = {tid: t for tid, t in global_data["active_trades"].items()
+              if t["status"] == "ACCEPTED"}
     if active:
         st.markdown("### 🚚 Aktív szállítások")
 
     for tid, t in active.items():
         with st.container(border=True):
+            oid = t.get("order_id", tid)
             rem = (t["eta_time"] - datetime.now()).total_seconds()
-            order_id = t.get('order_id', tid)
 
-            # Header
-            hcol1, hcol2 = st.columns([3, 1])
-            with hcol1:
+            hc1, hc2 = st.columns([3,1])
+            with hc1:
                 st.markdown(f"""
                 <div>
-                    <span style='font-size:16px;font-weight:700;'>🚚 {t['item']}</span>
-                    <span class='pill pill-accepted' style='margin-left:8px;'>ELFOGADVA</span><br>
-                    <span style='color:#888;font-size:13px;'>{t['start_loc']} → {t['end_loc']} • {order_id}</span><br>
-                    <span style='color:#888;font-size:13px;'>Feladó: {t['sender'].capitalize()} • Címzett: {t['receiver'].capitalize()}</span>
-                </div>
-                """, unsafe_allow_html=True)
-            with hcol2:
+                  <span style='font-size:15px;font-weight:700;'>🚚 {t['item']}</span>
+                  <span class='pill pill-accepted' style='margin-left:8px;'>AKTÍV</span><br>
+                  <span style='color:#888;font-size:12px;'>{oid} • {t['start_loc']} → {t['end_loc']}</span><br>
+                  <span style='color:#888;font-size:12px;'>{t['sender'].capitalize()} → {t['receiver'].capitalize()} • {t.get('payment_method','–')}</span>
+                </div>""", unsafe_allow_html=True)
+            with hc2:
                 if rem > 0:
-                    st.markdown(f"<div style='text-align:right;'><span style='font-size:24px;font-weight:800;color:#667eea;'>⏳ {int(rem//60):02d}:{int(rem%60):02d}</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align:right;font-size:26px;font-weight:900;color:#667eea;'>⏳ {int(rem//60):02d}:{int(rem%60):02d}</div>",
+                                unsafe_allow_html=True)
                 else:
-                    st.markdown("<div style='text-align:right;'><span style='font-size:16px;font-weight:700;color:#ffc107;'>⏰ ETA lejárt – hamarosan!</span></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='text-align:right;color:#ffc107;font-weight:700;font-size:14px;'>⏰ Hamarosan megérkezik!</div>",
+                                unsafe_allow_html=True)
 
-            c_ctrl, c_info = st.columns(2)
+            ctrl_col, info_col = st.columns(2)
 
-            with c_ctrl:
+            with ctrl_col:
                 if t["sender"] == current_user:
-                    states = ["Csomagolás alatt...", "Úton a reptérre", "A levegőben ✈️", "Kiszállítás alatt", "A kapu előtt 🚪"]
-                    new_s = st.selectbox("📍 Státusz frissítése", states,
-                        index=states.index(t["state_text"]) if t["state_text"] in states else 0,
+                    STATES = ["Csomagolás alatt...","Úton a reptérre","A levegőben ✈️","Kiszállítás alatt","A kapu előtt 🚪"]
+                    new_s = st.selectbox("📍 Státusz", STATES,
+                        index=STATES.index(t["state_text"]) if t["state_text"] in STATES else 0,
                         key=f"s_{tid}")
                     if new_s != t["state_text"]:
-                        old_s = t["state_text"]
-                        t["state_text"] = new_s
-                        send_message(t['receiver'],
-                            f"🐾 {order_id} • Friss státusz: **{new_s}** (volt: {old_s})",
-                            "info")
+                        old = t["state_text"]; t["state_text"] = new_s
+                        send_msg(t["receiver"], f"🐾 {oid} • Státusz: **{new_s}** (volt: {old})", "info")
                         st.markdown("<script>playCatSound('send')</script>", unsafe_allow_html=True)
                         st.rerun()
 
@@ -622,164 +543,252 @@ with menu[1]:
                         new_eta = st.number_input("Perc:", 1, 120, 5, key=f"eta_{tid}")
                         if st.button("🕐 Mentés", key=f"etab_{tid}"):
                             t["eta_time"] = datetime.now() + timedelta(minutes=new_eta)
-                            # Ha volt már notifikálva, töröljük hogy újra küldhessen
                             global_data["eta_notified"].discard(tid)
-                            send_message(t['receiver'],
-                                f"⏱️ {order_id} • ETA frissítve: {new_eta} perc múlva érkezik!",
-                                "info")
+                            send_msg(t["receiver"], f"⏱️ {oid} • ETA frissítve: {new_eta} perc!", "info")
                             st.rerun()
 
-                    # VISSZAIGAZOLÁS GOMB (felado nyomja)
                     if not t.get("confirm_requested") and not t.get("confirmed"):
-                        if st.button(f"📋 Visszaigazolás kérése", key=f"conf_req_{tid}", use_container_width=True):
+                        if st.button("📋 Visszaigazolás kérése", key=f"creq_{tid}", use_container_width=True):
                             t["confirm_requested"] = True
-                            send_message(t['receiver'],
-                                f"✍️ {order_id} • {t['sender'].capitalize()} kéri a csomag visszaigazolását! Kérlek írd alá a digitális papírt! 🐾",
-                                "alert")
+                            send_msg(t["receiver"],
+                                f"✍️ {oid} • {t['sender'].capitalize()} kéri az aláírásodat! 🐾", "alert")
                             st.markdown("<script>playCatSound('alert')</script>", unsafe_allow_html=True)
                             st.rerun()
                     elif t.get("confirm_requested") and not t.get("confirmed"):
                         st.info("⏳ Várakozás az aláírásra...")
                     elif t.get("confirmed"):
-                        st.success(f"✅ Visszaigazolva! Aláírás: *{t.get('signature','')}*")
-
+                        st.success(f"✅ Aláírva: *{t.get('signature','')}*")
                 else:
-                    st.info(f"📍 Helyzet: {t['state_text']}")
+                    st.info(f"📍 {t['state_text']}")
 
-            with c_info:
-                # DIGITÁLIS PAPÍR ALÁÍRÁS (cimzettnek, ha kérték)
-                if t['receiver'] == current_user and t.get("confirm_requested") and not t.get("confirmed"):
-                    st.markdown("""
-                    <div class="paper-sign">
-                        <div style="text-align:center;font-size:18px;font-weight:700;margin-bottom:16px;position:relative;z-index:1;">
-                            🐾 ÁTVÉTELI ELISMERVÉNY
-                        </div>
-                    """, unsafe_allow_html=True)
+            with info_col:
+                if t["receiver"] == current_user and t.get("confirm_requested") and not t.get("confirmed"):
                     st.markdown(f"""
-                        <div style="position:relative;z-index:1;font-family:Georgia,serif;">
-                            <p>Alulírott <b>{current_user.capitalize()}</b> igazolom, hogy a(z) <b>{t['item']}</b>
-                            nevű küldeményt ({order_id}) a mai napon ({datetime.now().strftime('%Y.%m.%d')})
-                            átvettem. A csomag épségben megérkezett.</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    sig = st.text_input("✍️ Aláírásod (írd be a neved):", key=f"sig_{tid}", placeholder="pl. Peti...")
+                    <div class="paper-sign">
+                      <div style="text-align:center;font-size:15px;font-weight:700;margin-bottom:12px;position:relative;z-index:1;">
+                          🐾 ÁTVÉTELI ELISMERVÉNY
+                      </div>
+                      <div style="position:relative;z-index:1;line-height:1.9;font-size:13px;">
+                          Alulírott <b>{current_user.capitalize()}</b> igazolom, hogy a(z)
+                          <b>{t['item']}</b> nevű küldeményt ({oid}) a mai napon
+                          ({datetime.now().strftime('%Y.%m.%d')}) átvettem.
+                          A csomag épségben megérkezett.
+                      </div>
+                    </div>""", unsafe_allow_html=True)
+                    sig = st.text_input("✍️ Írd alá (a neved):", key=f"sig_{tid}", placeholder="pl. Peti...")
                     if st.button("🖊️ ALÁÍR & VISSZAIGAZOL", key=f"sign_{tid}", use_container_width=True):
                         if sig.strip():
-                            t["confirmed"] = True
-                            t["signature"] = sig.strip()
-                            t["status"] = "DONE"
-                            t["done_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            global_data["trade_history"].append(t.copy())
-                            send_message(t['sender'],
-                                f"😺 {order_id} • {current_user.capitalize()} aláírta az elismervényt és visszaigazolta az átvételt! Aláírás: *{sig}* 🎉",
-                                "info")
-                            send_message(current_user,
-                                f"✅ {order_id} • Sikeres átvétel visszaigazolva! Ügylet lezárva. 🐾",
-                                "info")
+                            t.update({"confirmed": True, "signature": sig.strip(),
+                                      "status": "DONE",
+                                      "done_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+                            send_msg(t["sender"],
+                                f"😺 {oid} • {current_user.capitalize()} aláírta! Aláírás: *{sig}* 🎉", "info")
+                            send_msg(current_user, f"✅ {oid} • Ügylet lezárva! 🐾", "info")
                             st.markdown("<script>playCatSound('done')</script>", unsafe_allow_html=True)
                             st.rerun()
                         else:
-                            st.warning("Kérlek írd be a neved az aláíráshoz! 😾")
+                            st.warning("Írd be a neved! 😾")
 
-                # Számla letöltés
                 pdf = create_pdf(t, tid)
-                st.download_button("📥 SZÁMLA PDF", data=pdf, file_name=f"szamla_{order_id}.pdf",
-                                   key=f"p_{tid}", use_container_width=True)
+                st.download_button("📥 SZÁMLA", data=pdf, file_name=f"szamla_{oid}.pdf",
+                                   key=f"pdf_{tid}", use_container_width=True)
 
-# ==================== TAB 3: BANK ====================
+# ════════════════════════════════════════════
+# TAB 3 – BANK (4 jegyű PIN, csak saját egyenleg)
+# ════════════════════════════════════════════
 with menu[2]:
-    st.markdown("### 🏦 Tréd Bank")
-    bal = global_data['balances'].get(current_user, 0)
 
-    # Főkártya
-    st.markdown(f"""
-    <div class="rev-card" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 40%,#0f3460 100%);min-height:180px;">
-        <div class="rev-label">Tréd Főszámla</div>
-        <div class="rev-balance" style="font-size:48px;margin:12px 0;">{bal:,} Cam</div>
-        <div style="display:flex;gap:32px;margin-top:16px;">
-            <div>
-                <div class="rev-label">Tulajdonos</div>
-                <div style="color:white;font-weight:600;margin-top:4px;">{current_user.capitalize()}</div>
-            </div>
-            <div>
-                <div class="rev-label">Kártya típus</div>
-                <div style="color:#a8edea;font-weight:600;margin-top:4px;">Tréd Premium 🐾</div>
-            </div>
-        </div>
-        <div style="margin-top:16px;font-size:22px;letter-spacing:4px;color:rgba(255,255,255,0.4);">
-            •••• •••• •••• {abs(hash(current_user)) % 9000 + 1000}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    bank_in = global_data["bank_sessions"].get(current_user, False)
 
-    # NFC Terminál
-    st.markdown("---")
-    st.markdown("#### 📲 NFC Terminál")
-    nfc_col1, nfc_col2 = st.columns(2)
-    with nfc_col1:
-        nfc_amount = st.number_input("Összeg (Cam)", min_value=1, value=100, key="nfc_direct_amount")
-        nfc_target = st.selectbox("Kinek küldöd", [u for u in USERS if u != current_user], key="nfc_direct_target")
-    with nfc_col2:
+    if not bank_in:
+        st.markdown("### 🏦 Tréd Bank")
+        has_pin = current_user in global_data["bank_pins"]
+
+        _, center_col, _ = st.columns([1,2,1])
+        with center_col:
+            st.markdown(f"""
+            <div class="rev-card" style="text-align:center;">
+                <div style="font-size:52px;margin-bottom:8px;">🔐</div>
+                <div class="rev-label">{"BANK PIN BELÉPÉS" if has_pin else "PIN BEÁLLÍTÁSA"}</div>
+                <div style="color:rgba(255,255,255,0.5);font-size:12px;margin-top:8px;">
+                    {"Add meg a 4 jegyű bank PIN-ed" if has_pin else "Állíts be egy 4 jegyű PIN-t a bank eléréséhez"}
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+            if not has_pin:
+                pin1 = st.text_input("Új PIN (4 szám)", type="password", max_chars=4, key="bank_pin_new1")
+                pin2 = st.text_input("PIN megerősítése", type="password", max_chars=4, key="bank_pin_new2")
+                if st.button("🔐 PIN beállítása", use_container_width=True):
+                    if len(pin1) == 4 and pin1.isdigit() and pin1 == pin2:
+                        global_data["bank_pins"][current_user] = pin1
+                        st.success("✅ PIN beállítva!")
+                        st.rerun()
+                    else:
+                        st.error("4 számjegy kell, és egyezzen! 😾")
+            else:
+                entered = st.text_input("PIN", type="password", max_chars=4, key="bank_login_pin",
+                                        label_visibility="collapsed", placeholder="••••")
+                b1, b2 = st.columns(2)
+                with b1:
+                    if st.button("🏦 Belépés", use_container_width=True):
+                        if entered == global_data["bank_pins"].get(current_user):
+                            global_data["bank_sessions"][current_user] = True
+                            st.rerun()
+                        else:
+                            st.error("Hibás PIN! 😿")
+                with b2:
+                    if st.button("PIN törlése", use_container_width=True):
+                        global_data["bank_pins"].pop(current_user, None)
+                        st.rerun()
+    else:
+        bal = global_data["balances"].get(current_user, 0)
+        bh1, bh2 = st.columns([5,1])
+        with bh1:
+            st.markdown("### 🏦 Tréd Bank")
+        with bh2:
+            if st.button("🔒 Zár", use_container_width=True):
+                global_data["bank_sessions"][current_user] = False
+                st.rerun()
+
+        card_num = f"{abs(hash(current_user)) % 9000 + 1000}"
         st.markdown(f"""
-        <div style="background:rgba(102,126,234,0.1);border-radius:16px;padding:20px;text-align:center;border:1px solid rgba(102,126,234,0.3);">
-            <div class="nfc-animation" style="width:60px;height:60px;font-size:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);">📲</div>
-            <div style="color:#a8edea;font-size:13px;margin-top:8px;">NFC KÉSZ</div>
+        <div class="rev-card" style="min-height:200px;position:relative;overflow:hidden;">
+            <div style="position:absolute;right:-30px;top:-30px;width:180px;height:180px;
+                border-radius:50%;background:rgba(255,255,255,0.04);"></div>
+            <div class="rev-label">Tréd Premium Számla</div>
+            <div class="rev-balance" style="font-size:46px;margin:14px 0 8px;">{bal:,} Cam</div>
+            <div style="display:flex;gap:40px;margin-top:8px;">
+                <div><div class="rev-label">Tulajdonos</div>
+                     <div style="color:white;font-weight:600;margin-top:3px;">{current_user.capitalize()}</div></div>
+                <div><div class="rev-label">Típus</div>
+                     <div style="color:#a8edea;font-weight:600;margin-top:3px;">Premium 🐾</div></div>
+            </div>
+            <div style="margin-top:18px;font-size:20px;letter-spacing:5px;color:rgba(255,255,255,0.3);">
+                •••• •••• •••• {card_num}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-    if st.button("📲 NFC Küldés", use_container_width=True, key="nfc_direct_send"):
-        if global_data["balances"][current_user] >= nfc_amount:
-            global_data["balances"][current_user] -= nfc_amount
-            global_data["balances"][nfc_target] = global_data["balances"].get(nfc_target, 0) + nfc_amount
-            send_message(nfc_target,
-                f"📲 {current_user.capitalize()} NFC-n keresztül küldött neked {nfc_amount} Cam-et! 😸",
-                "info")
-            send_message(current_user,
-                f"✅ NFC átutalás sikeres! {nfc_amount} Cam → {nfc_target.capitalize()} 📲",
-                "info")
-            st.markdown("<script>playCatSound('done')</script>", unsafe_allow_html=True)
-            st.success(f"📲 Elküldve! {nfc_amount} Cam → {nfc_target.capitalize()}")
-            st.rerun()
-        else:
-            st.error("Nincs elég egyenleg! 😿")
+        bank_tabs = st.tabs(["📲 NFC Terminál", "💳 Kártya küldés", "📊 Kimutatás"])
 
-    # Egyenlegek táblázat
-    st.markdown("---")
-    st.markdown("#### 👥 Összes egyenleg")
-    bal_data = [{"Felhasználó": u.capitalize(), "Egyenleg": f"{b:,} Cam",
-                 "Online": "🟢" if u in online_now else "⚫"}
-                for u, b in global_data["balances"].items()]
-    st.dataframe(pd.DataFrame(bal_data), use_container_width=True, hide_index=True)
+        with bank_tabs[0]:
+            st.markdown("#### 📲 NFC Terminál")
+            st.markdown("""
+            <div style="background:rgba(102,126,234,0.08);border:1px solid rgba(102,126,234,0.2);
+                border-radius:12px;padding:14px;font-size:13px;color:#aaa;margin-bottom:16px;">
+                🐾 <b>Hogyan működik:</b> Te (postás/fogadó) elindítod → az összeg az NFC tagre kerül →
+                a fizető közelíti a telefonját → jóváhagyás. Valódi NFC: <b>Chrome Android</b>.
+            </div>""", unsafe_allow_html=True)
 
-# ==================== TAB 4: HISTORY ====================
+            tc1, tc2 = st.columns(2)
+            nfc_amt = tc1.number_input("Összeg (Cam)", min_value=1, value=500, key="nfc_bank_amount")
+            nfc_to  = tc2.selectbox("Fizető fél", [u for u in USERS if u != current_user], key="nfc_bank_to")
+            nfc_oid = st.text_input("Order ID (opcionális)", placeholder="ORD-...", key="nfc_bank_oid")
+
+            st.markdown(f"""
+            <div class="payment-modal">
+                <div class="nfc-pulse">📲</div>
+                <div style="color:white;font-size:16px;font-weight:700;">NFC terminál kész</div>
+                <div style="color:#888;font-size:13px;margin:8px 0;">Összeg: <b style="color:#43e97b;">{nfc_amt} Cam</b></div>
+                <div id="nfc-terminal-status" style="color:#667eea;font-size:12px;margin-top:8px;">
+                    Kattints az indításhoz ↓
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+            na, nb, nc = st.columns(3)
+            with na:
+                if st.button("📲 NFC Indítás", use_container_width=True, key="nfc_start_bank"):
+                    ref = nfc_oid if nfc_oid else "BANK"
+                    st.markdown(f"<script>startNFCTerminal({nfc_amt}, '{ref}');</script>",
+                                unsafe_allow_html=True)
+            with nb:
+                if st.button("✅ Jóváhagyás", use_container_width=True, key="nfc_bank_ok"):
+                    if global_data["balances"].get(nfc_to, 0) >= nfc_amt:
+                        global_data["balances"][nfc_to] -= nfc_amt
+                        global_data["balances"][current_user] = global_data["balances"].get(current_user, 0) + nfc_amt
+                        send_msg(nfc_to, f"📲 NFC: {nfc_amt} Cam levonva → {current_user.capitalize()}", "info")
+                        send_msg(current_user, f"✅ NFC beérkezett: {nfc_amt} Cam ← {nfc_to.capitalize()}", "info")
+                        st.markdown("<script>playCatSound('done')</script>", unsafe_allow_html=True)
+                        st.success(f"✅ {nfc_amt} Cam beérkezett!")
+                        st.rerun()
+                    else:
+                        st.error("A fizető félnek nincs elég egyenlege! 😿")
+            with nc:
+                st.markdown("<div style='color:#444;font-size:10px;text-align:center;padding-top:6px;'>Szimuláció:<br>ha nincs NFC</div>",
+                            unsafe_allow_html=True)
+
+        with bank_tabs[1]:
+            st.markdown("#### 💳 Kártya küldés")
+            ka, kb = st.columns(2)
+            k_to  = ka.selectbox("Kinek", [u for u in USERS if u != current_user], key="k_to")
+            k_amt = kb.number_input("Összeg (Cam)", min_value=1, value=200, key="k_amt")
+            k_note = st.text_input("Megjegyzés (opcionális)", key="k_note")
+            if st.button("💳 Küldés", use_container_width=True, key="k_send"):
+                if global_data["balances"].get(current_user, 0) >= k_amt:
+                    global_data["balances"][current_user] -= k_amt
+                    global_data["balances"][k_to] = global_data["balances"].get(k_to, 0) + k_amt
+                    note_txt = f" • {k_note}" if k_note else ""
+                    send_msg(k_to, f"💳 {current_user.capitalize()} küldött {k_amt} Cam-et{note_txt}", "info")
+                    send_msg(current_user, f"✅ {k_amt} Cam elküldve → {k_to.capitalize()}{note_txt}", "info")
+                    st.markdown("<script>playCatSound('done')</script>", unsafe_allow_html=True)
+                    st.success(f"✅ Elküldve! {k_amt} Cam → {k_to.capitalize()}")
+                    st.rerun()
+                else:
+                    st.error("Nincs elég egyenleg! 😿")
+
+        with bank_tabs[2]:
+            st.markdown("#### 📊 Saját kimutatás")
+            # CSAK A SAJÁT TRANZAKCIÓK – más egyenlege nem látható
+            my_trades = [t for t in global_data["active_trades"].values()
+                         if current_user in (t["sender"], t["receiver"])]
+            if not my_trades:
+                st.info("Még nincs tranzakció.")
+            else:
+                rows = []
+                for t in my_trades:
+                    is_recv = t["receiver"] == current_user
+                    amt = -(t["price"]+990) if is_recv else (t["price"]+495)
+                    rows.append({
+                        "Order": t.get("order_id","?"),
+                        "Termék": t["item"],
+                        "Partner": t["sender"].capitalize() if is_recv else t["receiver"].capitalize(),
+                        "Összeg": f"{'+' if amt>0 else ''}{amt} Cam",
+                        "Státusz": t["status"],
+                        "Fizetés": t.get("payment_method","–")
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+# ════════════════════════════════════════════
+# TAB 4 – HISTORY
+# ════════════════════════════════════════════
 with menu[3]:
     st.markdown("### 📜 Lezárt ügyletek")
-    done_trades = [t for t in global_data["active_trades"].values() if t['status'] == "DONE"]
+    done = [t for t in global_data["active_trades"].values() if t["status"] == "DONE"]
 
-    if not done_trades:
+    if not done:
         st.info("Még nincs lezárt ügylet. 😴")
     else:
-        for t in reversed(done_trades):
+        for t in reversed(done):
+            oid = t.get("order_id","?")
             with st.container(border=True):
-                h1, h2 = st.columns([3, 1])
-                with h1:
+                hh1, hh2 = st.columns([4,1])
+                with hh1:
+                    sig_html = f"<br><span style='color:#888;font-size:12px;'>✍️ {t['signature']}</span>" if t.get('signature') else ""
                     st.markdown(f"""
                     <div>
-                        <span style='font-weight:700;font-size:15px;'>✅ {t['item']}</span>
-                        <span class='pill pill-done' style='margin-left:8px;'>LEZÁRVA</span><br>
-                        <span style='color:#888;font-size:12px;'>{t.get('order_id','?')} • {t['sender'].capitalize()} → {t['receiver'].capitalize()}</span><br>
-                        <span style='color:#888;font-size:12px;'>{t['start_loc']} → {t['end_loc']}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with h2:
-                    st.markdown(f"<div style='text-align:right;color:#43e97b;font-weight:700;'>{t['price']+990} Cam</div>", unsafe_allow_html=True)
-                    if t.get("signature"):
-                        st.markdown(f"<div style='text-align:right;color:#888;font-size:12px;'>✍️ {t['signature']}</div>", unsafe_allow_html=True)
+                      <span style='font-weight:700;'>✅ {t['item']}</span>
+                      <span class='pill pill-done' style='margin-left:8px;'>LEZÁRVA</span><br>
+                      <span style='color:#888;font-size:12px;'>{oid} • {t['sender'].capitalize()} → {t['receiver'].capitalize()}</span><br>
+                      <span style='color:#888;font-size:12px;'>{t['start_loc']} → {t['end_loc']} • {t.get('payment_method','–')}</span>
+                      {sig_html}
+                    </div>""", unsafe_allow_html=True)
+                with hh2:
+                    st.markdown(f"<div style='text-align:right;color:#43e97b;font-weight:800;font-size:18px;'>{t['price']+990} Cam</div>",
+                                unsafe_allow_html=True)
 
-                pdf = create_pdf(t, t.get('order_id', 'N/A'))
-                st.download_button("📥 Számla", data=pdf,
-                    file_name=f"szamla_{t.get('order_id','ORD')}.pdf",
-                    key=f"hist_pdf_{t.get('order_id',id(t))}", use_container_width=True)
+                pdf = create_pdf(t, oid)
+                st.download_button("📥 Számla", data=pdf, file_name=f"szamla_{oid}.pdf",
+                                   key=f"hist_{oid}_{id(t)}", use_container_width=True)
 
 time.sleep(3)
 st.rerun()
