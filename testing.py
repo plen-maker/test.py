@@ -7,6 +7,30 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
+with st.sidebar:
+    st.markdown("### 🔔 Értesítések")
+    
+    # Lekérjük az aktuális user üzeneteit
+    user_msgs = global_data["messages"].get(current_user, [])
+    
+    if not user_msgs:
+        st.write("Nincs új értesítés.")
+    else:
+        for m in reversed(user_msgs[-8:]): # Az utolsó 8 üzenet mutatása
+            # Szín meghatározása típus szerint
+            color = "#f5576c" if m["type"] == "alert" else "#667eea"
+            
+            st.markdown(f"""
+                <div style="border-left: 3px solid {color}; padding: 5px 10px; margin-bottom: 8px; background: rgba(255,255,255,0.05);">
+                    <small style="color: #888;">{m['ts']} - {m['from']}</small><br>
+                    <span style="font-size: 14px;">{m['text']}</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+    if st.button("Értesítések törlése"):
+        global_data["messages"][current_user] = []
+        st.rerun()
+
 st.components.v1.html("""
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
