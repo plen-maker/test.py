@@ -200,7 +200,7 @@ function stopNFC(statusId) {
 async function initFCM(vapidKey) {
     if (!('serviceWorker' in navigator)) return;
     try {
-        const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+        const reg = await navigator.serviceWorker.register('/static/firebase-messaging-sw.js');
         const config = {
             apiKey: "AIzaSyDZb9bdfMFfzBRKM7bMO7GbvIH5CutYZB0",
             authDomain: "cattrade-591fb.firebaseapp.com",
@@ -210,22 +210,46 @@ async function initFCM(vapidKey) {
             appId: "1:168227931827:web:07fb9c3de0be56395252c6",
             measurementId: "G-F842ZDDB53"
         };
-        firebase.initializeApp(config);
+        if (!firebase.apps.length) {
+            firebase.initializeApp(config);
+        }
         const messaging = firebase.messaging();
         
+        // Request Permission explicitly
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            console.error("Notification permission not granted");
+            return;
+        }
+
         const token = await messaging.getToken({ serviceWorkerRegistration: reg, vapidKey: vapidKey });
         if (token) {
-            console.log("FCM Token acquired");
-            // Send token to Streamlit via a hidden input or similar
-            const input = window.parent.document.querySelector('input[aria-label="fcm_token_input"]');
-            if (input) {
-                const lastValue = input.value;
-                input.value = token;
-                const event = new Event('input', { bubbles: true });
-                input.dispatchEvent(event);
+            console.log("FCM Token acquired:", token);
+            // Robust way to find Streamlit input
+            const findAndFill = () => {
+                const inputs = window.parent.document.querySelectorAll('input[data-testid="stTextInputEnterChat"] , input');
+                for (let input of inputs) {
+                    if (input.ariaLabel === "fcm_token_input" || input.name === "fcm_token_input") {
+                        input.value = token;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        console.log("FCM Token sent to Streamlit");
+                        return true;
+                    }
+                }
+                return false;
+            };
+            if (!findAndFill()) {
+                // Try again in case of slow render
+                setTimeout(findAndFill, 2000);
             }
         }
-    } catch (e) { console.error("FCM Init Error:", e); }
+    } catch (e) { 
+        console.error("FCM Init Error:", e);
+        // Alert the user if it's a 404 for the SW
+        if (e.message && e.message.includes('404')) {
+            console.warn("Service worker not found at /static/firebase-messaging-sw.js");
+        }
+    }
 }
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
@@ -578,6 +602,10 @@ with st.sidebar:
 
     if cur_unreads:
         st.markdown(f'<div class="notif-banner">🔔 {len(cur_unreads)} új értesítés!</div>', unsafe_allow_html=True)
+        # Debug FCM status
+        has_token = current_user in global_data["fcm_tokens"]
+        st.markdown(f"<div style='font-size:10px;color:{'#43e97b' if has_token else '#f5576c'}'>FCM: {'OK' if has_token else 'Hiányzik'}</div>", unsafe_allow_html=True)
+        
         for m in cur_unreads[-6:]:
             icon="🙀" if m["type"]=="alert" else "😺"
             css="alert" if m["type"]=="alert" else ""
