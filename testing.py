@@ -1081,7 +1081,7 @@ with menu[0]:
             desc = st.text_area("Termék leírása (opcionális)", key="send_desc", placeholder="...")
             st.markdown("**📷 Fotó feltöltése**")
             photo = st.file_uploader(
-                "foto_upload", type=["jpg", "jpeg", "png"],
+                "foto_", type=["jpg", "jpeg", "png"],
                 key="send_photo", label_visibility="collapsed"
             )
             if photo:
