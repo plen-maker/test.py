@@ -89,7 +89,7 @@ def get_global_data():
         "bank_sessions": {},
         "last_msg_count": {},
         "fcm_tokens": {},
-        "nfc_pending": {},   # tid -> {amount, order_id, receiver} awaiting delivery payment
+        "nfc_pending": {},
     }
 
 gd = get_global_data()
@@ -150,7 +150,6 @@ def create_pdf(t, tid):
     W, H = A4
     oid = t.get("order_id", tid)
 
-    # ── header ──
     c.setFillColor(colors.HexColor("#0f3460"))
     c.rect(0, H-90, W, 90, fill=1, stroke=0)
     c.setFillColor(colors.HexColor("#667eea"))
@@ -164,7 +163,6 @@ def create_pdf(t, tid):
     c.setFont("Helvetica", 9); c.setFillColor(colors.HexColor("#a8edea"))
     c.drawRightString(W-30, H-66, f"Order: {oid}")
 
-    # ── info bar ──
     y = H - 115
     c.setFillColor(colors.HexColor("#f0f4ff"))
     c.rect(30, y-12, W-60, 44, fill=1, stroke=0)
@@ -181,7 +179,6 @@ def create_pdf(t, tid):
         c.setFont("Helvetica", 9); c.setFillColor(colors.HexColor("#111"))
         c.drawString(x, y+4, str(val)[:20])
 
-    # ── szállítási adatok ──
     y -= 36
     c.setFillColor(colors.HexColor("#667eea")); c.rect(30, y, W-60, 22, fill=1, stroke=0)
     c.setFont("Helvetica-Bold", 10); c.setFillColor(colors.white)
@@ -202,7 +199,6 @@ def create_pdf(t, tid):
         c.drawString(165, y-8, str(val))
         y -= 20
 
-    # ── összesítő ──
     y -= 14
     c.setFillColor(colors.HexColor("#0f3460")); c.rect(30, y, W-60, 22, fill=1, stroke=0)
     c.setFont("Helvetica-Bold", 10); c.setFillColor(colors.white)
@@ -218,14 +214,12 @@ def create_pdf(t, tid):
         c.drawString(40, y+5, lbl)
         c.drawRightString(W-38, y+5, val)
 
-    # ── total ──
     y -= 28
     c.setFillColor(colors.HexColor("#43e97b")); c.rect(30, y, W-60, 26, fill=1, stroke=0)
     c.setFont("Helvetica-Bold", 14); c.setFillColor(colors.HexColor("#0a2a1a"))
     c.drawString(40, y+7, "VÉGÖSSZEG")
     c.drawRightString(W-38, y+7, f"{t['price']+990:,} Cam")
 
-    # ── aláírás ──
     if t.get("signature"):
         y -= 40
         c.setFillColor(colors.HexColor("#fff8e7")); c.rect(30, y-8, W-60, 30, fill=1, stroke=0)
@@ -235,7 +229,6 @@ def create_pdf(t, tid):
         c.setFont("Helvetica", 12); c.setFillColor(colors.HexColor("#222"))
         c.drawString(190, y+14, t["signature"])
 
-    # ── watermark ──
     if t.get("status") == "DONE":
         c.saveState()
         c.translate(W/2, H/2); c.rotate(32)
@@ -245,7 +238,6 @@ def create_pdf(t, tid):
         c.drawCentredString(0, 0, "TELJESÍTVE")
         c.restoreState()
 
-    # ── footer ──
     c.setFillColor(colors.HexColor("#1a1a2e")); c.rect(0, 0, W, 42, fill=1, stroke=0)
     c.setFillColor(colors.HexColor("#667eea")); c.rect(0, 0, 6, 42, fill=1, stroke=0)
     c.setFont("Helvetica", 8); c.setFillColor(colors.HexColor("#aaa"))
@@ -272,8 +264,6 @@ FCM_IFRAME_HTML = f"""
 (async function() {{
   const config = {FCM_CONFIG};
   const vapid  = "{FCM_VAPID}";
-
-  // Register SW inline via blob — no /static/ needed!
   const swCode = `
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
@@ -288,13 +278,11 @@ messaging.onBackgroundMessage(payload => {{
 `;
   const blob = new Blob([swCode.replace('${{JSON.stringify(config)}}', JSON.stringify(config))], {{type:'text/javascript'}});
   const swUrl = URL.createObjectURL(blob);
-
   try {{
     if (!firebase.apps.length) firebase.initializeApp(config);
     const messaging = firebase.messaging();
     const reg = await navigator.serviceWorker.register(swUrl, {{scope:'/'}});
     await navigator.serviceWorker.ready;
-
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') {{
       window.parent.postMessage({{type:'fcm_token', token:'DENIED'}}, '*');
@@ -302,7 +290,6 @@ messaging.onBackgroundMessage(payload => {{
     }}
     const token = await messaging.getToken({{ serviceWorkerRegistration: reg, vapidKey: vapid }});
     window.parent.postMessage({{type:'fcm_token', token: token}}, '*');
-
     messaging.onMessage(payload => {{
       window.parent.postMessage({{type:'fcm_fg', payload: payload}}, '*');
     }});
@@ -316,11 +303,183 @@ messaging.onBackgroundMessage(payload => {{
 """
 
 # ─────────────────────────────────────────────
+# TAHOE LIVE WALLPAPER (canvas-based, injected as HTML component)
+# Only shown when logged in
+# ─────────────────────────────────────────────
+TAHOE_WALLPAPER_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:transparent;overflow:hidden;}
+canvas{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;}
+</style>
+</head>
+<body>
+<canvas id="tahoe"></canvas>
+<script>
+const cv=document.getElementById('tahoe');
+const ctx=cv.getContext('2d');
+let W,H,t=0;
+function resize(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;}
+resize();window.onresize=resize;
+function lerp(a,b,t){return a+(b-a)*t;}
+function draw(){
+  t+=0.002;
+  ctx.clearRect(0,0,W,H);
+  // Sky
+  const sp=(Math.sin(t*0.4)+1)/2;
+  const g=ctx.createLinearGradient(0,0,0,H*0.68);
+  g.addColorStop(0,`rgb(${Math.round(lerp(8,15,sp))},${Math.round(lerp(20,35,sp))},${Math.round(lerp(55,70,sp))})`);
+  g.addColorStop(0.5,`rgb(${Math.round(lerp(12,25,sp))},${Math.round(lerp(40,60,sp))},${Math.round(lerp(90,110,sp))})`);
+  g.addColorStop(1,`rgb(${Math.round(lerp(20,40,sp))},${Math.round(lerp(70,100,sp))},${Math.round(lerp(130,160,sp))})`);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H*0.68);
+  // Sun glow
+  const sx=W*0.75,sy=H*0.12;
+  const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,W*0.15);
+  sg.addColorStop(0,'rgba(255,240,180,0.4)');
+  sg.addColorStop(0.3,'rgba(255,200,80,0.15)');
+  sg.addColorStop(1,'rgba(255,150,0,0)');
+  ctx.fillStyle=sg;ctx.fillRect(sx-W*0.15,sy-W*0.15,W*0.3,W*0.3);
+  // Sun disc
+  ctx.fillStyle='rgba(255,245,200,0.85)';
+  ctx.beginPath();ctx.arc(sx,sy,W*0.022,0,Math.PI*2);ctx.fill();
+  // Clouds (subtle, semi-transparent for dark bg)
+  function cloud(x,y,s,a){
+    ctx.save();ctx.globalAlpha=a;ctx.fillStyle='rgba(120,160,210,0.5)';
+    [[0,0,s],[s*.6,-s*.35,s*.65],[s*1.2,s*.05,s*.75],[s*1.85,0,s*.55]].forEach(([cx,cy,r])=>{
+      ctx.beginPath();ctx.arc(x+cx,y+cy,r,0,Math.PI*2);ctx.fill();
+    });
+    ctx.restore();
+  }
+  cloud(W*.06+Math.sin(t*.18)*W*.008,H*.07,W*.022,0.35);
+  cloud(W*.38+Math.sin(t*.14+1)*W*.01,H*.04,W*.018,0.28);
+  cloud(W*.62+Math.sin(t*.16+2)*W*.007,H*.09,W*.025,0.25);
+  // Back mountains
+  ctx.fillStyle=`rgb(${Math.round(lerp(18,28,sp))},${Math.round(lerp(35,55,sp))},${Math.round(lerp(65,90,sp))})`;
+  ctx.beginPath();ctx.moveTo(0,H*.6);
+  [[0,.50],[.08,.34],[.15,.41],[.22,.29],[.3,.37],[.38,.25],[.45,.33],[.52,.27],[.6,.35],[.68,.21],[.75,.31],[.82,.27],[.9,.37],[1,.41],[1,.6]].forEach(([px,py])=>ctx.lineTo(W*px,H*py));
+  ctx.closePath();ctx.fill();
+  // Snow caps
+  ctx.fillStyle='rgba(200,220,240,0.6)';
+  [[.22,.29],[.38,.25],[.52,.27],[.68,.21],[.82,.27]].forEach(([px,py])=>{
+    ctx.beginPath();ctx.moveTo(W*px,H*py);ctx.lineTo(W*(px-.022),H*(py+.04));ctx.lineTo(W*(px+.022),H*(py+.04));ctx.closePath();ctx.fill();
+  });
+  // Mid mountains
+  ctx.fillStyle=`rgb(${Math.round(lerp(12,20,sp))},${Math.round(lerp(25,40,sp))},${Math.round(lerp(48,68,sp))})`;
+  ctx.beginPath();ctx.moveTo(0,H*.64);
+  [[0,.56],[.1,.47],[.18,.53],[.28,.43],[.37,.49],[.46,.41],[.55,.47],[.65,.43],[.74,.51],[.83,.45],[.92,.53],[1,.49],[1,.64]].forEach(([px,py])=>ctx.lineTo(W*px,H*py));
+  ctx.closePath();ctx.fill();
+  // Lake water
+  const wt=H*.64,wh=H*.22;
+  const wg=ctx.createLinearGradient(0,wt,0,wt+wh);
+  wg.addColorStop(0,`rgba(${Math.round(lerp(15,25,sp))},${Math.round(lerp(55,80,sp))},${Math.round(lerp(120,150,sp))},1)`);
+  wg.addColorStop(0.5,`rgba(${Math.round(lerp(10,18,sp))},${Math.round(lerp(40,60,sp))},${Math.round(lerp(95,120,sp))},1)`);
+  wg.addColorStop(1,`rgba(${Math.round(lerp(5,10,sp))},${Math.round(lerp(25,38,sp))},${Math.round(lerp(60,80,sp))},1)`);
+  ctx.fillStyle=wg;ctx.fillRect(0,wt,W,wh);
+  // Water shimmer
+  ctx.save();ctx.globalAlpha=0.18+Math.sin(t*2.5)*.06;
+  for(let i=0;i<14;i++){
+    const wx=W*(.05+i*.065+Math.sin(t*1.8+i)*.015);
+    const wy=wt+wh*(.15+i%3*.28+Math.sin(t*.9+i*.7)*.04);
+    ctx.strokeStyle='rgba(150,200,255,0.8)';ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(wx,wy);ctx.lineTo(wx+W*(.015+Math.sin(t+i)*.005),wy+.8);ctx.stroke();
+  }
+  ctx.restore();
+  // Mountain reflection
+  ctx.save();ctx.globalAlpha=0.12+Math.sin(t*.6)*.03;
+  ctx.transform(1,0,0,-.35,0,wt*1.38);
+  ctx.fillStyle=`rgba(${Math.round(lerp(12,20,sp))},${Math.round(lerp(25,40,sp))},${Math.round(lerp(48,68,sp))},1)`;
+  ctx.beginPath();ctx.moveTo(0,H*.64);
+  [[0,.56],[.1,.47],[.18,.53],[.28,.43],[.37,.49],[.46,.41],[.55,.47],[.65,.43],[.74,.51],[.83,.45],[.92,.53],[1,.49],[1,.64]].forEach(([px,py])=>ctx.lineTo(W*px,H*py));
+  ctx.lineTo(W,H*.64);ctx.closePath();ctx.fill();
+  ctx.restore();
+  // Sandy beach
+  const bt=H*.86;
+  const bg=ctx.createLinearGradient(0,bt,0,H);
+  bg.addColorStop(0,'#8B7355');bg.addColorStop(.4,'#7A6245');bg.addColorStop(1,'#5a4530');
+  ctx.fillStyle=bg;
+  ctx.beginPath();ctx.moveTo(0,bt);
+  ctx.quadraticCurveTo(W*.25,bt-H*.015,W*.5,bt+H*.004);
+  ctx.quadraticCurveTo(W*.75,bt+H*.012,W,bt);
+  ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+  // Waterline foam
+  ctx.save();ctx.globalAlpha=0.35+Math.sin(t*2)*.1;
+  const fm=ctx.createLinearGradient(0,bt-4,0,bt+7);
+  fm.addColorStop(0,'rgba(150,190,230,0.7)');fm.addColorStop(.5,'rgba(180,210,240,0.3)');fm.addColorStop(1,'rgba(150,190,230,0)');
+  ctx.fillStyle=fm;
+  ctx.beginPath();ctx.moveTo(0,bt+Math.sin(t*1.4)*2.5);
+  for(let x=0;x<=W;x+=W/18){ctx.lineTo(x,bt+Math.sin(t*1.8+x/W*7)*3.5+Math.sin(t*1.1+x/W*4)*1.5);}
+  ctx.lineTo(W,bt+7);ctx.lineTo(0,bt+7);ctx.closePath();ctx.fill();
+  ctx.restore();
+  // Pine trees
+  function pine(x,y,h,alpha){
+    ctx.save();ctx.globalAlpha=alpha;
+    for(let tier=0;tier<4;tier++){
+      const ty=y-h*.18-tier*h*.21;
+      const tw=h*(.48-tier*.09);
+      ctx.fillStyle=`rgba(${Math.round(lerp(15,25,sp))},${Math.round(lerp(45,65,sp))},${Math.round(lerp(25,35,sp))},${.75+tier*.06})`;
+      ctx.beginPath();ctx.moveTo(x,ty-h*.23);ctx.lineTo(x-tw,ty);ctx.lineTo(x+tw,ty);ctx.closePath();ctx.fill();
+    }
+    ctx.fillStyle='rgba(40,25,12,0.8)';
+    ctx.fillRect(x-h*.035,y-h*.18,h*.07,h*.2);
+    ctx.restore();
+  }
+  pine(W*.05,bt,H*.14,.9);pine(W*.11,bt-H*.015,H*.17,.85);pine(W*.17,bt-H*.005,H*.12,.8);
+  pine(W*.84,bt,H*.15,.9);pine(W*.90,bt-H*.01,H*.13,.85);pine(W*.96,bt+H*.01,H*.11,.8);
+  // Sailboat
+  const bx=W*.42+Math.sin(t*.25)*W*.04;
+  const by=wt+wh*.28+Math.sin(t*.7)*2.5;
+  ctx.save();ctx.translate(bx,by);
+  ctx.fillStyle='rgba(100,70,35,0.9)';
+  ctx.beginPath();ctx.moveTo(-22,0);ctx.lineTo(22,0);ctx.lineTo(18,11);ctx.lineTo(-18,11);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(220,230,240,0.7)';
+  ctx.beginPath();ctx.moveTo(0,-2);ctx.lineTo(0,-36);ctx.lineTo(20,-5);ctx.closePath();ctx.fill();
+  ctx.restore();
+  // Walking cats
+  function cat(cx,cy,s,flip){
+    ctx.save();ctx.translate(cx,cy);if(flip)ctx.scale(-1,1);ctx.scale(s,s);
+    ctx.fillStyle='rgba(25,18,8,0.9)';
+    ctx.beginPath();ctx.ellipse(0,0,17,10,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(-13,-5,8,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.moveTo(-20,-11);ctx.lineTo(-17,-19);ctx.lineTo(-13,-12);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(-9,-12);ctx.lineTo(-7,-19);ctx.lineTo(-4,-12);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(25,18,8,0.9)';ctx.lineWidth=2.5;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(17,-2);ctx.quadraticCurveTo(24,-11,18,-17);ctx.stroke();
+    const lp=Math.sin(t*3.5)*.35;
+    ctx.lineWidth=2.5;
+    [[-7,.5],[-2,.8],[5,.5],[11,.8]].forEach(([lx,phase],i)=>{
+      const ly=i%2===0?Math.sin(t*3.5+phase)*4:Math.sin(t*3.5+phase+Math.PI)*4;
+      ctx.beginPath();ctx.moveTo(lx,8);ctx.lineTo(lx+lp*3,11+ly);ctx.stroke();
+    });
+    ctx.fillStyle='rgba(255,200,60,0.9)';ctx.beginPath();ctx.arc(-15,-6,2.2,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.9)';ctx.beginPath();ctx.arc(-15,-6,0.9,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+  const c1x=((t*45)%(W+80))-40;
+  const c2x=((t*30+W*.45)%(W+80))-40;
+  const c3x=W-((t*38+W*.25)%(W+80))+40;
+  cat(c1x,bt+H*.035,1.1,false);
+  cat(c2x,bt+H*.055,.85,false);
+  cat(c3x,bt+H*.025,1.0,true);
+  // Subtle vignette
+  const v=ctx.createRadialGradient(W/2,H/2,H*.28,W/2,H/2,H*.75);
+  v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,0.5)');
+  ctx.fillStyle=v;ctx.fillRect(0,0,W,H);
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>
+"""
+
+# ─────────────────────────────────────────────
 # GLOBAL JS  (sound + vibrate + flash + NFC)
 # ─────────────────────────────────────────────
 JS_ALL = r"""
 <script>
-// Listen for FCM token from iframe
 window.addEventListener('message', function(e) {
   if (e.data && e.data.type === 'fcm_token') {
     const inp = document.querySelector('input[aria-label="fcm_input"]');
@@ -336,7 +495,6 @@ window.addEventListener('message', function(e) {
   }
 });
 
-// ── Toast ────────────────────────────────────
 function showToast(title, body) {
   const d = document.createElement('div');
   d.style.cssText = 'position:fixed;top:20px;right:20px;z-index:999999;background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;padding:16px 20px;border-radius:16px;border:1px solid rgba(102,126,234,0.4);box-shadow:0 8px 32px rgba(0,0,0,0.5);max-width:320px;animation:toastIn 0.3s ease;font-family:Inter,sans-serif;';
@@ -345,7 +503,6 @@ function showToast(title, body) {
   setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity 0.4s';setTimeout(()=>d.remove(),400);}, 4000);
 }
 
-// ── Sounds ──────────────────────────────────
 function playCatSound(type) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -390,7 +547,6 @@ function fullAlert(type) {
   else                       { playCatSound(type);      vibrate([150]); }
 }
 
-// ── Title blink ──────────────────────────────
 let _origTitle = document.title, _ti = null;
 function alertTitle(msg) {
   if (_ti) return; let on=true;
@@ -400,8 +556,6 @@ function clearTitleAlert() {
   if(_ti){clearInterval(_ti);_ti=null;} document.title=_origTitle;
 }
 
-// ── NFC ──────────────────────────────────────
-// Uses plain TEXT records — avoids the vnd.android.nfc intent bug completely.
 window._nfcAbort = null;
 
 async function startNFCWrite(amount, orderId, statusId) {
@@ -458,7 +612,6 @@ function stopNFC(statusId) {
   if(el) el.innerHTML='⏹️ NFC leállítva.';
 }
 
-// style inject for toast animation
 const s=document.createElement('style');
 s.textContent='@keyframes toastIn{from{transform:translateX(100%);opacity:0}to{transform:none;opacity:1}}';
 document.head.appendChild(s);
@@ -466,88 +619,82 @@ document.head.appendChild(s);
 """
 
 # ─────────────────────────────────────────────
-# CSS
+# CSS  — NOTE: login-bg, stars-layer, moon, cat-walk REMOVED from here.
+#              They are now only injected inside the login block below.
 # ─────────────────────────────────────────────
 STYLE = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
-/* ── reset & dark bg ── */
 *, *::before, *::after { box-sizing: border-box; }
+
+/* ── App background: fully transparent so Tahoe canvas shows through ── */
 html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"],
 .main, .block-container {
     background: transparent !important;
 }
 [data-testid="stAppViewContainer"] {
-    background: linear-gradient(160deg, #050b18 0%, #0a1628 40%, #0d1f3c 70%, #0a1020 100%) !important;
+    background: transparent !important;
     min-height: 100vh;
 }
 
-/* ── sidebar dark ── */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0a0f1e 0%, #0d1630 100%) !important;
+    background: linear-gradient(180deg, rgba(5,10,20,0.92) 0%, rgba(10,18,42,0.92) 100%) !important;
+    backdrop-filter: blur(12px) !important;
     border-right: 1px solid rgba(102,126,234,0.15) !important;
 }
 [data-testid="stSidebar"] * { font-family: 'Inter', sans-serif !important; }
 
-/* ── hide clutter ── */
 #MainMenu, footer, header,
 [data-testid="stDecoration"],
 [data-testid="stStatusWidget"],
 button[title="View menu"] { display: none !important; visibility: hidden !important; }
 
-/* ── fix double arrow in expander ── */
 [data-testid="stExpander"] summary > div > p { display: none !important; }
 details > summary::-webkit-details-marker { display: none !important; }
-
-/* ── fix double label on file uploader ── */
 [data-testid="stFileUploader"] > label:nth-of-type(2) { display: none !important; }
 
-/* ── global font ── */
 * { font-family: 'Inter', sans-serif !important; }
 
-/* ── containers ── */
 [data-testid="stVerticalBlock"] > div { background: transparent !important; }
 [data-testid="element-container"] { background: transparent !important; }
 
-/* ── inputs dark ── */
 input, textarea, select,
 [data-testid="stTextInput"] input,
 [data-testid="stNumberInput"] input,
 [data-testid="stSelectbox"] select,
 [data-testid="stTextArea"] textarea {
-    background: rgba(255,255,255,0.06) !important;
+    background: rgba(255,255,255,0.07) !important;
     color: white !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
+    border: 1px solid rgba(255,255,255,0.14) !important;
     border-radius: 10px !important;
 }
 input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.3) !important; }
 label { color: rgba(255,255,255,0.7) !important; }
 
-/* ── tabs ── */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
-    background: rgba(255,255,255,0.03) !important;
+    background: rgba(255,255,255,0.04) !important;
     border-radius: 12px;
     border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(8px);
 }
 [data-testid="stTabs"] [data-baseweb="tab"] {
     color: rgba(255,255,255,0.5) !important;
     font-weight: 600;
 }
 [data-testid="stTabs"] [aria-selected="true"] {
-    background: rgba(102,126,234,0.2) !important;
+    background: rgba(102,126,234,0.22) !important;
     color: #a8edea !important;
     border-radius: 10px;
 }
 
-/* ── st.container(border=True) ── */
 [data-testid="stVerticalBlockBorderWrapper"] {
-    background: rgba(255,255,255,0.03) !important;
+    background: rgba(5,12,28,0.65) !important;
+    backdrop-filter: blur(10px) !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 16px !important;
 }
 
-/* ── buttons ── */
 [data-testid="stButton"] > button {
     background: linear-gradient(135deg, #667eea, #764ba2) !important;
     color: white !important;
@@ -561,7 +708,6 @@ label { color: rgba(255,255,255,0.7) !important; }
     box-shadow: 0 6px 20px rgba(102,126,234,0.4) !important;
 }
 
-/* ── download button ── */
 [data-testid="stDownloadButton"] > button {
     background: rgba(102,126,234,0.15) !important;
     color: #a8edea !important;
@@ -570,27 +716,22 @@ label { color: rgba(255,255,255,0.7) !important; }
     font-weight: 600 !important;
 }
 
-/* ── markdown text ── */
 p, li, span, div { color: rgba(255,255,255,0.85); }
 h1,h2,h3,h4 { color: white !important; }
 
-/* ── st.info / warning / success ── */
 [data-testid="stAlert"] {
-    background: rgba(255,255,255,0.05) !important;
+    background: rgba(255,255,255,0.06) !important;
     border-radius: 12px !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
 }
 
-/* ── dataframe ── */
 [data-testid="stDataFrame"] { background: rgba(255,255,255,0.03) !important; border-radius: 12px !important; }
 
-/* ── hide FCM hidden input ── */
 div:has(> div > div > input[aria-label="fcm_input"]) { display:none !important; height:0 !important; overflow:hidden !important; }
 
-/* ══ COMPONENTS ════════════════════════════ */
-
 .rev-card {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    background: linear-gradient(135deg, rgba(26,26,46,0.9) 0%, rgba(22,33,62,0.9) 50%, rgba(15,52,96,0.9) 100%);
+    backdrop-filter: blur(12px);
     border-radius: 20px; padding: 24px; color: white; margin-bottom: 16px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.08);
 }
@@ -615,12 +756,13 @@ div:has(> div > div > input[aria-label="fcm_input"]) { display:none !important; 
     50%      { box-shadow: 0 0 0 22px rgba(102,126,234,0); transform:scale(1.06); }
 }
 .payment-modal {
-    background: linear-gradient(180deg, #1a1a2e, #0a0f1e);
+    background: linear-gradient(180deg, rgba(26,26,46,0.9), rgba(10,15,30,0.9));
+    backdrop-filter: blur(10px);
     border-radius: 24px; padding: 28px; border: 1px solid rgba(255,255,255,0.1);
     text-align: center; margin: 10px 0;
 }
 .msg-bubble {
-    background: rgba(102,126,234,0.1); border-left: 3px solid #667eea;
+    background: rgba(102,126,234,0.12); border-left: 3px solid #667eea;
     border-radius: 0 10px 10px 0; padding: 9px 14px; margin: 6px 0; font-size: 12px; color: #ddd;
 }
 .msg-bubble.alert { background: rgba(245,87,108,0.1); border-left-color: #f5576c; }
@@ -652,97 +794,6 @@ div:has(> div > div > input[aria-label="fcm_input"]) { display:none !important; 
     from { box-shadow: 0 0 0 0 rgba(245,87,108,0.6); }
     to   { box-shadow: 0 0 20px 4px rgba(245,87,108,0.25); }
 }
-
-/* ══ ANIMÁLT BEJELENTKEZÉS HÁTTÉR ══════════ */
-.login-bg {
-    position: fixed; inset: 0; z-index: 0; overflow: hidden;
-    background: linear-gradient(180deg, #020b1a 0%, #041025 30%, #071830 60%, #020b1a 100%);
-}
-.stars-layer {
-    position: absolute; inset: 0;
-    background-image:
-        radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.9) 0%, transparent 100%),
-        radial-gradient(1px 1px at 25% 8%,  rgba(255,255,255,0.7) 0%, transparent 100%),
-        radial-gradient(2px 2px at 40% 20%, rgba(168,237,234,0.8) 0%, transparent 100%),
-        radial-gradient(1px 1px at 55% 5%,  rgba(255,255,255,0.6) 0%, transparent 100%),
-        radial-gradient(1px 1px at 70% 12%, rgba(255,255,255,0.9) 0%, transparent 100%),
-        radial-gradient(2px 2px at 85% 7%,  rgba(168,237,234,0.7) 0%, transparent 100%),
-        radial-gradient(1px 1px at 92% 18%, rgba(255,255,255,0.8) 0%, transparent 100%),
-        radial-gradient(1px 1px at 15% 35%, rgba(255,255,255,0.5) 0%, transparent 100%),
-        radial-gradient(1px 1px at 30% 42%, rgba(255,255,255,0.7) 0%, transparent 100%),
-        radial-gradient(2px 2px at 48% 30%, rgba(168,237,234,0.6) 0%, transparent 100%),
-        radial-gradient(1px 1px at 62% 38%, rgba(255,255,255,0.8) 0%, transparent 100%),
-        radial-gradient(1px 1px at 78% 25%, rgba(255,255,255,0.5) 0%, transparent 100%),
-        radial-gradient(1px 1px at 5%  50%, rgba(255,255,255,0.6) 0%, transparent 100%),
-        radial-gradient(1px 1px at 90% 45%, rgba(255,255,255,0.7) 0%, transparent 100%),
-        radial-gradient(2px 2px at 35% 55%, rgba(168,237,234,0.5) 0%, transparent 100%),
-        radial-gradient(1px 1px at 20% 60%, rgba(255,255,255,0.4) 0%, transparent 100%),
-        radial-gradient(1px 1px at 72% 58%, rgba(255,255,255,0.6) 0%, transparent 100%);
-    animation: starsTwinkle 4s ease-in-out infinite alternate;
-}
-@keyframes starsTwinkle {
-    0%   { opacity: 0.6; }
-    50%  { opacity: 1.0; }
-    100% { opacity: 0.7; }
-}
-
-/* Mountains SVG injected via HTML, but we also do a CSS version for the gradient */
-.moon {
-    position: absolute; width: 80px; height: 80px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, #fff9e6, #ffeaa0);
-    top: 8%; right: 15%;
-    box-shadow: 0 0 40px 12px rgba(255,230,100,0.25), 0 0 80px 30px rgba(255,220,80,0.1);
-    animation: moonGlow 3s ease-in-out infinite alternate;
-}
-@keyframes moonGlow {
-    from { box-shadow: 0 0 40px 12px rgba(255,230,100,0.2), 0 0 80px 30px rgba(255,220,80,0.08); }
-    to   { box-shadow: 0 0 50px 18px rgba(255,230,100,0.35), 0 0 100px 40px rgba(255,220,80,0.15); }
-}
-
-/* Cats walking across the bottom */
-.cat-walk {
-    position: absolute; bottom: 22%; font-size: 28px;
-    animation: catWalk 18s linear infinite;
-    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
-}
-.cat-walk:nth-child(1) { animation-delay: 0s;    bottom: 20%; font-size: 24px; }
-.cat-walk:nth-child(2) { animation-delay: 6s;    bottom: 23%; font-size: 20px; animation-duration:22s; }
-.cat-walk:nth-child(3) { animation-delay: 12s;   bottom: 21%; font-size: 26px; animation-duration:16s; }
-@keyframes catWalk {
-    0%   { left: -80px;  transform: scaleX(1); }
-    49%  { left: 110%;   transform: scaleX(1); }
-    50%  { left: 110%;   transform: scaleX(-1); }
-    99%  { left: -80px;  transform: scaleX(-1); }
-    100% { left: -80px;  transform: scaleX(1); }
-}
-
-/* shooting stars */
-.shoot {
-    position: absolute; width: 2px; height: 2px; border-radius: 50%;
-    background: white;
-    animation: shoot 6s linear infinite;
-    opacity: 0;
-}
-.shoot:nth-child(1) { top:10%; left:20%; animation-delay:0s; }
-.shoot:nth-child(2) { top:5%;  left:60%; animation-delay:2s; animation-duration:8s; }
-.shoot:nth-child(3) { top:15%; left:80%; animation-delay:4.5s; animation-duration:5s; }
-@keyframes shoot {
-    0%   { opacity:0; transform:translate(0,0) rotate(-30deg); }
-    5%   { opacity:1; }
-    20%  { opacity:0; transform:translate(200px,120px) rotate(-30deg); }
-    100% { opacity:0; transform:translate(200px,120px) rotate(-30deg); }
-}
-.shoot::after {
-    content:''; position:absolute; top:0; left:-80px; width:80px; height:1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8));
-    transform: rotate(0deg);
-}
-
-.login-card-wrap {
-    position: relative; z-index: 10;
-    display: flex; align-items: center; justify-content: center;
-    min-height: 100vh; padding: 20px;
-}
 </style>
 """
 
@@ -753,43 +804,89 @@ st.markdown(STYLE, unsafe_allow_html=True)
 st.markdown(JS_ALL, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# FCM IFRAME (always injected, hidden)
-# ─────────────────────────────────────────────
-components.html(FCM_IFRAME_HTML, height=0, scrolling=False)
-
-# FCM token pickup via hidden input
-fcm_token_val = st.text_input("x", key="fcm_input", label_visibility="collapsed")
-if fcm_token_val and "username" in st.session_state:
-    cu = st.session_state.username
-    if fcm_token_val.startswith("ERROR:") or fcm_token_val == "DENIED":
-        st.session_state["fcm_err"] = fcm_token_val
-    else:
-        gd["fcm_tokens"][cu] = fcm_token_val
-        st.session_state.pop("fcm_err", None)
-
-# ─────────────────────────────────────────────
-# LOGIN – animated
+# LOGIN – animated background injected ONLY here
 # ─────────────────────────────────────────────
 if "username" not in st.session_state:
-    # Full-screen animated background
+    # ── Login-only animated background (position:fixed, only on login page) ──
     st.markdown("""
+    <style>
+    /* Login-only styles — scoped inside this block via a body class trick.
+       We add a class to body only when login is shown. */
+    .login-bg {
+        position: fixed; inset: 0; z-index: 0; overflow: hidden;
+        background: linear-gradient(180deg, #020b1a 0%, #041025 30%, #071830 60%, #020b1a 100%);
+    }
+    .stars-layer {
+        position: absolute; inset: 0;
+        background-image:
+            radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.9) 0%, transparent 100%),
+            radial-gradient(1px 1px at 25% 8%,  rgba(255,255,255,0.7) 0%, transparent 100%),
+            radial-gradient(2px 2px at 40% 20%, rgba(168,237,234,0.8) 0%, transparent 100%),
+            radial-gradient(1px 1px at 55% 5%,  rgba(255,255,255,0.6) 0%, transparent 100%),
+            radial-gradient(1px 1px at 70% 12%, rgba(255,255,255,0.9) 0%, transparent 100%),
+            radial-gradient(2px 2px at 85% 7%,  rgba(168,237,234,0.7) 0%, transparent 100%),
+            radial-gradient(1px 1px at 92% 18%, rgba(255,255,255,0.8) 0%, transparent 100%),
+            radial-gradient(1px 1px at 15% 35%, rgba(255,255,255,0.5) 0%, transparent 100%),
+            radial-gradient(1px 1px at 30% 42%, rgba(255,255,255,0.7) 0%, transparent 100%),
+            radial-gradient(2px 2px at 48% 30%, rgba(168,237,234,0.6) 0%, transparent 100%),
+            radial-gradient(1px 1px at 62% 38%, rgba(255,255,255,0.8) 0%, transparent 100%),
+            radial-gradient(1px 1px at 78% 25%, rgba(255,255,255,0.5) 0%, transparent 100%);
+        animation: starsTwinkle 4s ease-in-out infinite alternate;
+    }
+    @keyframes starsTwinkle { 0%{opacity:.6} 50%{opacity:1} 100%{opacity:.7} }
+    .moon {
+        position: absolute; width: 80px; height: 80px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 35%, #fff9e6, #ffeaa0);
+        top: 8%; right: 15%;
+        box-shadow: 0 0 40px 12px rgba(255,230,100,0.25), 0 0 80px 30px rgba(255,220,80,0.1);
+        animation: moonGlow 3s ease-in-out infinite alternate;
+    }
+    @keyframes moonGlow {
+        from { box-shadow: 0 0 40px 12px rgba(255,230,100,0.2), 0 0 80px 30px rgba(255,220,80,0.08); }
+        to   { box-shadow: 0 0 50px 18px rgba(255,230,100,0.35), 0 0 100px 40px rgba(255,220,80,0.15); }
+    }
+    .cat-walk {
+        position: absolute; bottom: 22%; font-size: 28px;
+        animation: catWalk 18s linear infinite;
+        filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
+    }
+    .cat-walk:nth-child(1) { animation-delay: 0s;   bottom: 20%; font-size: 24px; }
+    .cat-walk:nth-child(2) { animation-delay: 6s;   bottom: 23%; font-size: 20px; animation-duration:22s; }
+    .cat-walk:nth-child(3) { animation-delay: 12s;  bottom: 21%; font-size: 26px; animation-duration:16s; }
+    @keyframes catWalk {
+        0%  { left: -80px; transform: scaleX(1); }
+        49% { left: 110%;  transform: scaleX(1); }
+        50% { left: 110%;  transform: scaleX(-1); }
+        99% { left: -80px; transform: scaleX(-1); }
+        100%{ left: -80px; transform: scaleX(1); }
+    }
+    .shoot { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: white; animation: shoot 6s linear infinite; opacity: 0; }
+    .shoot:nth-child(1) { top:10%; left:20%; animation-delay:0s; }
+    .shoot:nth-child(2) { top:5%;  left:60%; animation-delay:2s; animation-duration:8s; }
+    .shoot:nth-child(3) { top:15%; left:80%; animation-delay:4.5s; animation-duration:5s; }
+    @keyframes shoot {
+        0%  { opacity:0; transform:translate(0,0) rotate(-30deg); }
+        5%  { opacity:1; }
+        20% { opacity:0; transform:translate(200px,120px) rotate(-30deg); }
+        100%{ opacity:0; transform:translate(200px,120px) rotate(-30deg); }
+    }
+    .shoot::after { content:''; position:absolute; top:0; left:-80px; width:80px; height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.8)); }
+    @keyframes catBounce {
+        0%,100% { transform: translateY(0) rotate(-5deg); }
+        50%     { transform: translateY(-12px) rotate(5deg); }
+    }
+    </style>
+
     <div class="login-bg">
         <div class="stars-layer"></div>
-        <!-- Shooting stars -->
         <div class="shoot"></div>
         <div class="shoot"></div>
         <div class="shoot"></div>
-        <!-- Moon -->
         <div class="moon"></div>
-        <!-- SVG Mountains -->
         <svg style="position:absolute;bottom:0;left:0;width:100%;height:45%;" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- back mountains - deep blue -->
             <polygon points="0,320 0,200 120,80 240,160 360,60 480,140 600,40 720,120 840,50 960,130 1080,45 1200,110 1320,55 1440,100 1440,320" fill="#0a1628" opacity="0.9"/>
-            <!-- mid mountains - slightly lighter -->
             <polygon points="0,320 0,240 100,140 200,200 320,110 420,180 540,100 660,170 780,90 900,160 1020,105 1140,165 1260,95 1380,150 1440,120 1440,320" fill="#0d1f3c" opacity="0.95"/>
-            <!-- front mountains - darkest -->
             <polygon points="0,320 0,280 80,200 180,250 280,180 380,240 480,170 580,230 680,160 780,220 880,165 980,225 1080,170 1180,230 1280,180 1380,240 1440,200 1440,320" fill="#071020" opacity="1"/>
-            <!-- snow caps -->
             <polygon points="120,80 100,110 140,110" fill="rgba(255,255,255,0.15)"/>
             <polygon points="360,60 340,90 380,90" fill="rgba(255,255,255,0.15)"/>
             <polygon points="600,40 578,72 622,72" fill="rgba(255,255,255,0.2)"/>
@@ -797,14 +894,13 @@ if "username" not in st.session_state:
             <polygon points="1080,45 1058,78 1102,78" fill="rgba(255,255,255,0.18)"/>
             <polygon points="1320,55 1298,88 1342,88" fill="rgba(255,255,255,0.12)"/>
         </svg>
-        <!-- Walking cats -->
         <div class="cat-walk">🐈</div>
         <div class="cat-walk">😺</div>
         <div class="cat-walk">🐈‍⬛</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Login card centered
+    # Login card
     _, mid, _ = st.columns([1, 1.2, 1])
     with mid:
         st.markdown("""
@@ -823,12 +919,6 @@ if "username" not in st.session_state:
                 -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0 0 6px;">TRÉD</h1>
             <p style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:36px;letter-spacing:2px;">MACSKÁS KERESKEDÉSI PLATFORM</p>
         </div>
-        <style>
-        @keyframes catBounce {
-            0%,100% { transform: translateY(0) rotate(-5deg); }
-            50%      { transform: translateY(-12px) rotate(5deg); }
-        }
-        </style>
         """, unsafe_allow_html=True)
 
         u = st.text_input("Felhasználónév", key="lu", placeholder="felhasznalonev").lower().strip()
@@ -842,13 +932,32 @@ if "username" not in st.session_state:
     st.stop()
 
 # ─────────────────────────────────────────────
+# LOGGED IN: inject Tahoe live wallpaper canvas
+# ─────────────────────────────────────────────
+components.html(TAHOE_WALLPAPER_HTML, height=0, scrolling=False)
+
+# ─────────────────────────────────────────────
+# FCM IFRAME (always injected, hidden)
+# ─────────────────────────────────────────────
+components.html(FCM_IFRAME_HTML, height=0, scrolling=False)
+
+# FCM token pickup
+fcm_token_val = st.text_input("x", key="fcm_input", label_visibility="collapsed")
+if fcm_token_val and "username" in st.session_state:
+    cu = st.session_state.username
+    if fcm_token_val.startswith("ERROR:") or fcm_token_val == "DENIED":
+        st.session_state["fcm_err"] = fcm_token_val
+    else:
+        gd["fcm_tokens"][cu] = fcm_token_val
+        st.session_state.pop("fcm_err", None)
+
+# ─────────────────────────────────────────────
 # SESSION
 # ─────────────────────────────────────────────
 current_user = st.session_state.username
 gd["online_users"][current_user] = time.time()
 online_now = [u for u, ts in gd["online_users"].items() if time.time() - ts < 10]
 
-# ── New message alert trigger ──
 prev_count = gd["last_msg_count"].get(current_user, 0)
 cur_unreads = get_unread(current_user)
 cur_count = len(cur_unreads)
@@ -858,7 +967,6 @@ if cur_count > prev_count:
     st.markdown(f"<script>fullAlert('{atype}'); alertTitle('ÚJ ÉRTESÍTÉS');</script>", unsafe_allow_html=True)
     gd["last_msg_count"][current_user] = cur_count
 
-# ── ETA lejárat ──
 for tid, t in list(gd["active_trades"].items()):
     if t["status"] == "ACCEPTED":
         rem = (t["eta_time"] - datetime.now()).total_seconds()
@@ -960,24 +1068,17 @@ with menu[0]:
 
         with col_form:
             target = st.selectbox("Címzett", targets, key="send_target")
-
-            # Helyszínek - külön sorok, nincs egymásba csúszás
             lc1, lc2 = st.columns(2)
             with lc1:
                 start = st.selectbox("Indulás", LOCATIONS, key="send_start")
             with lc2:
                 end = st.selectbox("Célállomás", LOCATIONS, key="send_end")
-
-            # Ár + terméknév külön sorban
             pc1, pc2 = st.columns(2)
             with pc1:
                 price = st.number_input("Ár (Cam)", min_value=0, value=1000, key="send_price")
             with pc2:
                 item = st.text_input("Termék neve", key="send_item", placeholder="pl. Arany lánc")
-
             desc = st.text_area("Termék leírása (opcionális)", key="send_desc", placeholder="...")
-
-            # Fotó - saját label, label_visibility=collapsed hogy ne duplikáljon
             st.markdown("**📷 Fotó feltöltése**")
             photo = st.file_uploader(
                 "foto_upload", type=["jpg", "jpeg", "png"],
@@ -1016,7 +1117,7 @@ with menu[0]:
                         "confirmed":       False,
                         "signature":       None,
                         "accepted_at":     None,
-                        "delivery_paid":   False,   # NFC fizetés a kézbesítéskor
+                        "delivery_paid":   False,
                     }
                     send_msg(
                         target,
@@ -1056,7 +1157,6 @@ with menu[0]:
 # ════════════════════════════════════════════
 with menu[1]:
 
-    # ─── BEJÖVŐ AJÁNLATOK (WAITING) ──────────────────────────────────
     reqs = {
         tid: t for tid, t in gd["active_trades"].items()
         if t["receiver"] == current_user and t["status"] == "WAITING"
@@ -1083,8 +1183,6 @@ with menu[1]:
                     unsafe_allow_html=True
                 )
 
-            # ── Elfogadás: NEM kér fizetési módot itt, csak elfogadja ──
-            # Fizetés a kézbesítéskor fog történni (NFC a kapunál)
             st.markdown("""
             <div style="background:rgba(102,126,234,0.08);border:1px solid rgba(102,126,234,0.2);
                 border-radius:10px;padding:10px;font-size:12px;color:#aaa;margin:8px 0;">
@@ -1118,7 +1216,6 @@ with menu[1]:
 
     st.divider()
 
-    # ─── AKTÍV SZÁLLÍTÁSOK (ACCEPTED) ────────────────────────────────
     active = {
         tid: t for tid, t in gd["active_trades"].items()
         if t["status"] == "ACCEPTED"
@@ -1132,7 +1229,6 @@ with menu[1]:
             rem = (t["eta_time"] - datetime.now()).total_seconds()
             cost = t["price"] + 990
 
-            # ── fejléc ──
             hc1, hc2 = st.columns([3, 1])
             with hc1:
                 st.markdown(f"""
@@ -1158,7 +1254,6 @@ with menu[1]:
 
             with ctrl_col:
                 if t["sender"] == current_user:
-                    # ── Státusz frissítés ──
                     cur_idx = STATES.index(t["state_text"]) if t["state_text"] in STATES else 0
                     new_s = st.selectbox("📍 Státusz", STATES, index=cur_idx, key=f"s_{tid}")
                     if new_s != t["state_text"]:
@@ -1171,7 +1266,6 @@ with menu[1]:
                         st.markdown("<script>fullAlert('send');</script>", unsafe_allow_html=True)
                         st.rerun()
 
-                    # ── ETA módosítás (expander nélkül – arrow bug elkerülése) ──
                     st.markdown("**⏱️ ETA módosítás**")
                     ec1, ec2 = st.columns([3, 1])
                     with ec1:
@@ -1188,7 +1282,6 @@ with menu[1]:
 
                     st.divider()
 
-                    # ── KÉZBESÍTÉSI NFC FIZETÉS (feladó/postás indítja) ──
                     st.markdown("**💰 Kézbesítési fizetés**")
                     if not t.get("delivery_paid"):
                         st.markdown(f"""
@@ -1223,7 +1316,6 @@ with menu[1]:
                                     unsafe_allow_html=True
                                 )
                         with dn3:
-                            # Auto-clicked by JS on NFC tap
                             nfc_del_ok = st.button("✅ NFC OK", key=f"nfc_del_ok_{tid}", use_container_width=True)
                             st.markdown(f'<span id="{confirm_id_delivery}" style="display:none"></span>', unsafe_allow_html=True)
                             if nfc_del_ok:
@@ -1232,16 +1324,8 @@ with menu[1]:
                                     gd["balances"][current_user]   = gd["balances"].get(current_user, 0) + t["price"] + 495
                                     t["payment_method"] = "📲 NFC (kézbesítés)"
                                     t["delivery_paid"]  = True
-                                    send_msg(
-                                        t["receiver"],
-                                        f"📲 {oid} • NFC kézbesítési fizetés sikeres! {cost:,} Cam levonva.",
-                                        "info"
-                                    )
-                                    send_msg(
-                                        current_user,
-                                        f"💰 {oid} • Fizetés beérkezett: {t['price']+495:,} Cam NFC-vel 🎉",
-                                        "info"
-                                    )
+                                    send_msg(t["receiver"], f"📲 {oid} • NFC kézbesítési fizetés sikeres! {cost:,} Cam levonva.", "info")
+                                    send_msg(current_user, f"💰 {oid} • Fizetés beérkezett: {t['price']+495:,} Cam NFC-vel 🎉", "info")
                                     st.markdown("<script>fullAlert('done');</script>", unsafe_allow_html=True)
                                     st.rerun()
                                 else:
@@ -1253,16 +1337,8 @@ with menu[1]:
                                     gd["balances"][current_user]   = gd["balances"].get(current_user, 0) + t["price"] + 495
                                     t["payment_method"] = "💳 Kártya (kézbesítés)"
                                     t["delivery_paid"]  = True
-                                    send_msg(
-                                        t["receiver"],
-                                        f"💳 {oid} • Kártyás kézbesítési fizetés sikeres! {cost:,} Cam levonva.",
-                                        "info"
-                                    )
-                                    send_msg(
-                                        current_user,
-                                        f"💰 {oid} • Kártyás fizetés beérkezett: {t['price']+495:,} Cam 🎉",
-                                        "info"
-                                    )
+                                    send_msg(t["receiver"], f"💳 {oid} • Kártyás kézbesítési fizetés sikeres! {cost:,} Cam levonva.", "info")
+                                    send_msg(current_user, f"💰 {oid} • Kártyás fizetés beérkezett: {t['price']+495:,} Cam 🎉", "info")
                                     st.markdown("<script>fullAlert('done');</script>", unsafe_allow_html=True)
                                     st.rerun()
                                 else:
@@ -1270,16 +1346,11 @@ with menu[1]:
                     else:
                         st.success(f"✅ Fizetés teljesítve! ({t.get('payment_method','–')})")
 
-                    # ── Visszaigazolás kérése ──
                     st.divider()
                     if not t.get("confirm_requested") and not t.get("confirmed"):
                         if st.button("📋 Visszaigazolás kérése", key=f"creq_{tid}", use_container_width=True):
                             t["confirm_requested"] = True
-                            send_msg(
-                                t["receiver"],
-                                f"✍️ {oid} • {t['sender'].capitalize()} kéri az aláírásodat! 🐾",
-                                "alert"
-                            )
+                            send_msg(t["receiver"], f"✍️ {oid} • {t['sender'].capitalize()} kéri az aláírásodat! 🐾", "alert")
                             st.markdown("<script>fullAlert('alert');</script>", unsafe_allow_html=True)
                             st.rerun()
                     elif t.get("confirm_requested") and not t.get("confirmed"):
@@ -1288,7 +1359,6 @@ with menu[1]:
                         st.success(f"✅ Aláírva: *{t.get('signature','')}*")
 
                 else:
-                    # ── Cimzett nézete ──
                     st.info(f"📍 {t['state_text']}")
 
                     if t.get("delivery_paid"):
@@ -1309,7 +1379,6 @@ with menu[1]:
                         </div>""", unsafe_allow_html=True)
 
             with info_col:
-                # ── Digitális papír aláírás ──
                 if t["receiver"] == current_user and t.get("confirm_requested") and not t.get("confirmed"):
                     st.markdown(f"""
                     <div class="paper-sign">
@@ -1332,18 +1401,13 @@ with menu[1]:
                                 "status":     "DONE",
                                 "done_at":    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             })
-                            send_msg(
-                                t["sender"],
-                                f"😺 {oid} • {current_user.capitalize()} aláírta az elismervényt! ✍️ {sig} 🎉",
-                                "info"
-                            )
+                            send_msg(t["sender"], f"😺 {oid} • {current_user.capitalize()} aláírta az elismervényt! ✍️ {sig} 🎉", "info")
                             send_msg(current_user, f"✅ {oid} • Ügylet sikeresen lezárva! 🐾", "info")
                             st.markdown("<script>fullAlert('done');</script>", unsafe_allow_html=True)
                             st.rerun()
                         else:
                             st.warning("Írd be a neved az aláíráshoz! 😾")
 
-                # ── Számla PDF ──
                 pdf = create_pdf(t, tid)
                 st.download_button(
                     "📥 SZÁMLA PDF", data=pdf,
@@ -1352,7 +1416,7 @@ with menu[1]:
                 )
 
 # ════════════════════════════════════════════
-# TAB 3 – BANK (4 jegyű PIN)
+# TAB 3 – BANK
 # ════════════════════════════════════════════
 with menu[2]:
     bank_in = gd["bank_sessions"].get(current_user, False)
@@ -1382,10 +1446,7 @@ with menu[2]:
                     else:
                         st.error("4 számjegy kell, és egyezzen! 😾")
             else:
-                entered = st.text_input(
-                    "PIN", type="password", max_chars=4, key="blp",
-                    label_visibility="collapsed", placeholder="••••"
-                )
+                entered = st.text_input("PIN", type="password", max_chars=4, key="blp", label_visibility="collapsed", placeholder="••••")
                 b1, b2 = st.columns(2)
                 with b1:
                     if st.button("🏦 Belépés", use_container_width=True, key="bank_login"):
@@ -1413,8 +1474,6 @@ with menu[2]:
         <div class="rev-card" style="min-height:210px;position:relative;overflow:hidden;">
             <div style="position:absolute;right:-40px;top:-40px;width:200px;height:200px;
                 border-radius:50%;background:rgba(255,255,255,0.03);"></div>
-            <div style="position:absolute;right:60px;bottom:-20px;width:120px;height:120px;
-                border-radius:50%;background:rgba(102,126,234,0.05);"></div>
             <div class="rev-label">Tréd Premium Számla</div>
             <div class="rev-balance" style="font-size:46px;margin:14px 0 10px;">{bal:,} Cam</div>
             <div style="display:flex;gap:40px;margin-top:8px;">
@@ -1447,8 +1506,7 @@ with menu[2]:
                 border-radius:12px;padding:14px;font-size:13px;color:#aaa;margin-bottom:16px;">
                 <b>Postás / terminál oldal:</b> Add meg az összeget → <b>NFC Írás</b> → tartsd a fizető telefonját<br>
                 <b>Fizető oldal:</b> <b>NFC Olvasás</b> → érintsd a terminált → automatikus jóváhagyás<br>
-                <b>Nincs NFC?</b> Kézi Jóváhagyás gombbal is működik<br><br>
-                ✅ <b>vnd.android hiba javítva</b> — plain TEXT NDEF rekordot írunk, nem URL-t.
+                ✅ <b>vnd.android hiba javítva</b> — plain TEXT NDEF rekordot írunk.
             </div>""", unsafe_allow_html=True)
 
             tc1, tc2 = st.columns(2)
@@ -1473,12 +1531,10 @@ with menu[2]:
             bn1, bn2, bn3, bn4 = st.columns(4)
             with bn1:
                 if st.button("✏️ NFC Írás", use_container_width=True, key="nfc_write_bank"):
-                    st.markdown(f"<script>startNFCWrite({nfc_amt},'{nfc_ref}','{nb_id}');</script>",
-                                unsafe_allow_html=True)
+                    st.markdown(f"<script>startNFCWrite({nfc_amt},'{nfc_ref}','{nb_id}');</script>", unsafe_allow_html=True)
             with bn2:
                 if st.button("📡 NFC Olvasás", use_container_width=True, key="nfc_read_bank"):
-                    st.markdown(f"<script>startNFCRead('{nb_id}','{nb_cid}');</script>",
-                                unsafe_allow_html=True)
+                    st.markdown(f"<script>startNFCRead('{nb_id}','{nb_cid}');</script>", unsafe_allow_html=True)
             with bn3:
                 bank_ok = st.button("✅ Jóváhagyás", use_container_width=True, key="nfc_bank_ok")
                 st.markdown(f'<span id="{nb_cid}" style="display:none"></span>', unsafe_allow_html=True)
@@ -1531,7 +1587,7 @@ with menu[2]:
                     if t["status"] == "DONE" or t.get("delivery_paid"):
                         amt = -(t["price"] + 990) if is_recv else (t["price"] + 495)
                     else:
-                        amt = 0  # még nem fizetett
+                        amt = 0
                     rows.append({
                         "Order":   t.get("order_id", "?"),
                         "Termék":  t["item"],
